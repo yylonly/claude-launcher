@@ -12,10 +12,12 @@ This is a single-file bash project: `start-claude.sh` — an interactive launche
 ./start-claude.sh
 ```
 
-The script is interactive and will prompt for:
-1. Provider selection (Anthropic, MiniMaxi, or Bailian/DashScope)
-2. Model selection (varies by provider)
-3. API keys (if not already set or saved)
+The script is interactive and will:
+
+1. **Check Claude Code** — Verifies installation, auto-installs if missing, checks for updates
+2. **Provider selection** (Anthropic, MiniMaxi, or Bailian/DashScope)
+3. **Model selection** (varies by provider)
+4. **API keys** (if not already set or saved)
 
 ## Providers Supported
 
@@ -46,4 +48,5 @@ bash -n start-claude.sh
 The script follows a simple structure:
 1. **Configuration** (lines 1-30): Shebang, error handling, ANSI colors, path variables
 2. **Helper Functions** (lines 28-200): Settings writing, config loading, UI helpers
-3. **Main Flow** (lines 205-345): Provider selection → Model selection → Launch
+3. **Claude Code Check** (lines 201-260): Installation check, auto-install, update checking
+4. **Main Flow** (lines 265-465): Provider selection → Model selection → Launch
