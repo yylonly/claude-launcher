@@ -208,10 +208,107 @@ require_key() {
   fi
 }
 
+# ─── Claude Code installation check ──────────────────────────────────────────
+check_claude_code() {
+  echo -e "${CYAN}${BOLD}  Checking Claude Code installation...${RESET}"
+
+  # Check if claude is installed
+  if ! command -v claude &>/dev/null; then
+    echo ""
+    echo -e "${YELLOW}Claude Code is not installed.${RESET}"
+    echo ""
+    echo "Claude Code is required to use this launcher."
+    echo ""
+    read -rp "  Install Claude Code now? [Y/n]: " install_choice
+    echo ""
+
+    if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
+      echo -e "${CYAN}Installing Claude Code...${RESET}"
+      echo ""
+
+      # Use the official install command
+      if ! curl -sSL https://claude.ai/install.sh | bash; then
+        echo ""
+        echo -e "${RED}Error: Failed to install Claude Code.${RESET}"
+        echo ""
+        echo "You can manually install it with:"
+        echo "  curl -sSL https://claude.ai/install.sh | bash"
+        echo ""
+        echo "Or visit: https://claude.ai/code"
+        exit 1
+      fi
+
+      # Re-check if installation succeeded
+      if ! command -v claude &>/dev/null; then
+        echo ""
+        echo -e "${YELLOW}Installation completed but 'claude' command not found.${RESET}"
+        echo "Please restart your terminal or run:"
+        echo "  source ~/.bashrc  # or ~/.zshrc"
+        exit 1
+      fi
+
+      echo ""
+      echo -e "${GREEN}✓ Claude Code installed successfully!${RESET}"
+      echo ""
+    else
+      echo "Installation cancelled. Claude Code is required."
+      exit 1
+    fi
+  else
+    # Claude is installed, check for updates
+    local current_version
+    current_version=$(claude --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[[0-9]+(\.[0-9]+)?' | head -n1 || echo "unknown")
+
+    echo -e "  ${DIM}Current version:${RESET} ${current_version}"
+    echo ""
+
+    # Check for updates (non-blocking, just informative)
+    echo -e "  ${DIM}Checking for updates...${RESET}"
+    if claude update --dry-run &>/dev/null 2>&1; then
+      # Try to run actual update check
+      if ! claude update --check &>/dev/null 2>&1; then
+        # Alternative: try to get latest version info
+        local latest_version
+        latest_version=$(curl -s https://api.github.com/repos/anthropics/claude-code/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+"' | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || echo "")
+
+        if [[ -n "$latest_version" && "$latest_version" != "$current_version" ]]; then
+          echo ""
+          echo -e "${YELLOW}Update available:${RESET} ${current_version} → ${GREEN}${latest_version}${RESET}"
+          read -rp "  Update now? [y/N]: " update_choice
+          echo ""
+
+          if [[ "$update_choice" =~ ^[Yy]$ ]]; then
+            echo -e "${CYAN}Updating Claude Code...${RESET}"
+            if claude update; then
+              echo ""
+              echo -e "${GREEN}✓ Update successful!${RESET}"
+            else
+              echo ""
+              echo -e "${YELLOW}Update failed. You can retry later with:${RESET} claude update"
+            fi
+            echo ""
+          fi
+        else
+          echo -e "  ${GREEN}✓ Up to date${RESET}"
+          echo ""
+        fi
+      else
+        echo -e "  ${GREEN}✓ Up to date${RESET}"
+        echo ""
+      fi
+    fi
+  fi
+
+  sleep 1
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Load saved defaults
 # ─────────────────────────────────────────────────────────────────────────────
 load_defaults
+
+# ─── Check Claude Code installation before proceeding ──────────────────────────
+check_claude_code
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  STEP 1 — Select Provider
