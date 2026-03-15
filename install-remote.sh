@@ -40,8 +40,8 @@ else
 fi
 
 # Create symlinks
-echo -n "Creating cl symlink... "
-ln -sf "${INSTALL_DIR}/${INSTALL_NAME}" "${INSTALL_DIR}/cl" 2>/dev/null || true
+echo -n "Creating cli symlink... "
+ln -sf "${INSTALL_DIR}/${INSTALL_NAME}" "${INSTALL_DIR}/cli" 2>/dev/null || true
 echo -e "${GREEN}✓${RESET}"
 
 echo -n "Creating start-claude symlink... "
@@ -59,8 +59,8 @@ fi
 echo -e "${GREEN}Installation complete!${RESET}"
 echo ""
 echo "Run:"
-echo -e "  ${BOLD}cl${RESET}    — Launch with saved config"
-echo -e "  ${BOLD}cl -r${RESET}  — Resume last session"
-echo -e "  ${BOLD}cl -c${RESET}  — Interactive configuration"
-echo -e "  ${BOLD}cl -u${RESET}  — Check for updates"
-echo -e "  ${BOLD}cl -h${RESET}  — Show help"
+echo -e "  ${BOLD}cli${RESET}    — Launch with saved config"
+echo -e "  ${BOLD}cli -r${RESET}  — Resume last session"
+echo -e "  ${BOLD}cli -c${RESET}  — Interactive configuration"
+echo -e "  ${BOLD}cli -u${RESET}  — Check for updates"
+echo -e "  ${BOLD}cli -h${RESET}  — Show help"
