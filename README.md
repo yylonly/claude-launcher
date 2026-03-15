@@ -22,6 +22,12 @@ An interactive launcher for [Claude Code](https://claude.ai/code) that supports 
 
 ## Installation
 
+### One-liner Install (Recommended)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/yylonly/claude-launcher/main/install-remote.sh | bash
+```
+
 ### Quick Install
 
 ```bash
