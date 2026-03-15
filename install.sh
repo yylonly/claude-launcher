@@ -102,6 +102,7 @@ if command -v "$INSTALL_NAME" &>/dev/null; then
     echo -e "  ${BOLD}cc${RESET}                 — Launch with saved config"
     echo -e "  ${BOLD}cc -r${RESET}              — Resume last session"
     echo -e "  ${BOLD}cc -c${RESET}            — Interactive configuration"
+    echo -e "  ${BOLD}cc -u${RESET}              — Check for updates"
     echo -e "  ${BOLD}cc -h${RESET}              — Show help"
     echo ""
     echo "Or with the full name:"

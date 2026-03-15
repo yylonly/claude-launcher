@@ -4,6 +4,14 @@
 
 set -euo pipefail
 
+# ─── Version & Update ─────────────────────────────────────────────────────
+VERSION="1.0.0"
+UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+if [[ -L "$SCRIPT_PATH" ]]; then
+    SCRIPT_PATH="$(readlink -f "$SCRIPT_PATH")"
+fi
+
 # ─── Clear any leftover provider env vars from previous sessions ─────────────
 unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY
 
@@ -23,6 +31,40 @@ CONFIG_FILE="${HOME}/.claude-launcher.conf"
 CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
 CLAUDE_SETTINGS_BAK="${HOME}/.claude/settings.json.launcher-bak"
 CLAUDE_JSON="${HOME}/.claude.json"
+
+# ─── Auto-update function ───────────────────────────────────────────────────
+check_update() {
+    echo -e "${CYAN}Checking for updates...${RESET}"
+
+    # Get remote version
+    local remote_version
+    remote_version=$(curl -sSL "$UPDATE_URL" 2>/dev/null | grep -m1 '^VERSION=' | cut -d'"' -f2 || echo "")
+
+    if [[ -z "$remote_version" ]]; then
+        echo -e "${YELLOW}Could not check for updates.${RESET}"
+        return 1
+    fi
+
+    if [[ "$remote_version" != "$VERSION" ]]; then
+        echo -e "${YELLOW}Update available:${RESET} v${VERSION} → v${remote_version}"
+        echo ""
+        read -rp "  Update now? [y/N]: " update_choice
+        if [[ "$update_choice" =~ ^[Yy]$ ]]; then
+            echo -e "${CYAN}Updating...${RESET}"
+            if curl -sSL "$UPDATE_URL" -o "$SCRIPT_PATH" && chmod +x "$SCRIPT_PATH"; then
+                echo -e "${GREEN}✓ Updated successfully!${RESET}"
+                echo "Please run again."
+                exit 0
+            else
+                echo -e "${RED}Update failed.${RESET}"
+                return 1
+            fi
+        fi
+    else
+        echo -e "${GREEN}✓ Up to date (v${VERSION})${RESET}"
+    fi
+    return 0
+}
 
 # ─── settings.json helpers ───────────────────────────────────────────────────
 write_minimax_settings() {
@@ -505,20 +547,25 @@ quick_launch() {
 RESUME_MODE=0
 RESUME_SESSION=""
 CONF_MODE=0
-if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
+if [[ "${1:-}" == "-u" ]] || [[ "${1:-}" == "--update" ]]; then
+  check_update
+  exit $?
+elif [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
   echo ""
-  echo -e "${BOLD}Claude Code Launcher${RESET}"
+  echo -e "${BOLD}Claude Code Launcher v${VERSION}${RESET}"
   echo ""
   echo "Usage:"
   echo -e "  ${GREEN}cc${RESET}                 # Quick launch with saved configuration"
   echo -e "  ${GREEN}cc -r${RESET}             # Resume last session (interactive picker)"
   echo -e "  ${GREEN}cc -r [id]${RESET}        # Resume specific session by ID"
   echo -e "  ${GREEN}cc -c${RESET}             # Interactive configuration"
+  echo -e "  ${GREEN}cc -u${RESET}             # Check for updates"
   echo -e "  ${GREEN}cc -h${RESET}             # Show this help message"
   echo ""
   echo "Options:"
   echo "  -r, --resume [id]  Resume a session (optional: session ID)"
   echo "  -c                 Show interactive configuration menu"
+  echo "  -u, --update       Check for updates and install if available"
   echo "  -h, --help         Show this help message"
   echo ""
   echo "Examples:"
@@ -526,6 +573,7 @@ if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
   echo "  cc -r               # Resume last session"
   echo "  cc -r abc123        # Resume session abc123"
   echo "  cc -c               # Change provider/model/API key"
+  echo "  cc -u               # Check for updates"
   echo ""
   exit 0
 elif [[ "${1:-}" == "-r" ]] || [[ "${1:-}" == "--resume" ]]; then

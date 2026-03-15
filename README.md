@@ -8,6 +8,7 @@ An interactive launcher for [Claude Code](https://claude.ai/code) that supports 
 - **Easy Configuration** — Save API keys and preferred models
 - **Quick Launch** — Start Claude Code with your chosen provider in seconds
 - **Session Resume** — Resume last session with -r flag
+- **Auto Update** — Check and update launcher with -u flag
 - **Simple Install** — One-command install to your PATH
 - **Auto-Install** — Automatically installs Claude Code if not present
 - **Auto-Update** — Checks for and prompts to install Claude Code updates
@@ -56,6 +57,7 @@ cc                      # Quick launch with saved config
 cc -r                  # Resume last session
 cc -r [session_id]     # Resume specific session
 cc -c                  # Interactive configuration
+cc -u                  # Check for updates
 cc -h                  # Show help
 # or
 claude-launcher
@@ -78,6 +80,14 @@ The launcher saves your last project directory, so you can quickly resume your l
 ```bash
 cc -r              # Resume last session (interactive picker)
 cc -r [session_id] # Resume a specific session by ID
+```
+
+### Auto Update
+
+Check for launcher updates:
+
+```bash
+cc -u              # Check for updates and prompt to install
 ```
 
 ### Configuration
