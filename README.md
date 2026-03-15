@@ -53,12 +53,12 @@ chmod +x ~/.local/bin/claude-launcher
 Run the launcher:
 
 ```bash
-cc                      # Quick launch with saved config
-cc -r                  # Resume last session
-cc -r [session_id]     # Resume specific session
-cc -c                  # Interactive configuration
-cc -u                  # Check for updates
-cc -h                  # Show help
+cl                      # Quick launch with saved config
+cl -r                  # Resume last session
+cl -r [session_id]     # Resume specific session
+cl -c                  # Interactive configuration
+cl -u                  # Check for updates
+cl -h                  # Show help
 # or
 claude-launcher
 start-claude
