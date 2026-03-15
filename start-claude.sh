@@ -540,7 +540,7 @@ quick_launch() {
   # Save config including project directory for resume
   save_defaults
 
-  exec claude --model "$SELECTED_MODEL" --dangerously-skip-permissions "${EXTRA_ARGS[@]}"
+  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
 }
 
 # ─── Main: Handle arguments ─────────────────────────────────────────────────
@@ -555,12 +555,12 @@ elif [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
   echo -e "${BOLD}Claude Code Launcher v${VERSION}${RESET}"
   echo ""
   echo "Usage:"
-  echo -e "  ${GREEN}cl${RESET}                 # Quick launch with saved configuration"
-  echo -e "  ${GREEN}cl -r${RESET}             # Resume last session (interactive picker)"
-  echo -e "  ${GREEN}cl -r [id]${RESET}        # Resume specific session by ID"
-  echo -e "  ${GREEN}cl -c${RESET}             # Interactive configuration"
-  echo -e "  ${GREEN}cl -u${RESET}             # Check for updates"
-  echo -e "  ${GREEN}cl -h${RESET}             # Show this help message"
+  echo -e "  ${GREEN}cli${RESET}                # Quick launch with saved configuration"
+  echo -e "  ${GREEN}cli -r${RESET}            # Resume last session (interactive picker)"
+  echo -e "  ${GREEN}cli -r [id]${RESET}       # Resume specific session by ID"
+  echo -e "  ${GREEN}cli -c${RESET}            # Interactive configuration"
+  echo -e "  ${GREEN}cli -u${RESET}            # Check for updates"
+  echo -e "  ${GREEN}cli -h${RESET}            # Show this help message"
   echo ""
   echo "Options:"
   echo "  -r, --resume [id]  Resume a session (optional: session ID)"
@@ -569,11 +569,11 @@ elif [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
   echo "  -h, --help         Show this help message"
   echo ""
   echo "Examples:"
-  echo "  cl                  # Launch with last used provider/model"
-  echo "  cl -r               # Resume last session"
-  echo "  cl -r abc123        # Resume session abc123"
-  echo "  cl -c               # Change provider/model/API key"
-  echo "  cl -u               # Check for updates"
+  echo "  cli                 # Launch with last used provider/model"
+  echo "  cli -r              # Resume last session"
+  echo "  cli -r abc123       # Resume session abc123"
+  echo "  cli -c              # Change provider/model/API key"
+  echo "  cli -u              # Check for updates"
   echo ""
   exit 0
 elif [[ "${1:-}" == "-r" ]] || [[ "${1:-}" == "--resume" ]]; then
@@ -717,7 +717,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
   fi
   echo ""
 
-  exec claude --model "$SELECTED_MODEL" --dangerously-skip-permissions "${RESUME_ARGS[@]}"
+  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${RESUME_ARGS[@]}"
 fi
 
 # Quick launch if no conf mode
@@ -899,4 +899,4 @@ echo ""
 echo -e "  ${DIM}Press Ctrl+C to cancel...${RESET}"
 sleep 1
 
-exec claude --model "$SELECTED_MODEL" --dangerously-skip-permissions "${EXTRA_ARGS[@]}"
+exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"

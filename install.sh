@@ -83,9 +83,9 @@ else
 fi
 echo -e "${GREEN}✓ Done${RESET}"
 
-# Create cl symlink
-echo -n "Creating cl symlink... "
-TARGET_CL="${INSTALL_DIR}/cl"
+# Create cli symlink
+echo -n "Creating cli symlink... "
+TARGET_CL="${INSTALL_DIR}/cli"
 if [[ "$USE_SUDO" == true ]]; then
     sudo ln -sf "$TARGET_FILE" "$TARGET_CL"
 else
@@ -99,11 +99,11 @@ if command -v "$INSTALL_NAME" &>/dev/null; then
     echo -e "${GREEN}Installation successful!${RESET}"
     echo ""
     echo "You can now run:"
-    echo -e "  ${BOLD}cl${RESET}                 — Launch with saved config"
-    echo -e "  ${BOLD}cl -r${RESET}              — Resume last session"
-    echo -e "  ${BOLD}cl -c${RESET}            — Interactive configuration"
-    echo -e "  ${BOLD}cl -u${RESET}              — Check for updates"
-    echo -e "  ${BOLD}cl -h${RESET}              — Show help"
+    echo -e "  ${BOLD}cli${RESET}                — Launch with saved config"
+    echo -e "  ${BOLD}cli -r${RESET}            — Resume last session"
+    echo -e "  ${BOLD}cli -c${RESET}            — Interactive configuration"
+    echo -e "  ${BOLD}cli -u${RESET}            — Check for updates"
+    echo -e "  ${BOLD}cli -h${RESET}            — Show help"
     echo ""
     echo "Or with the full name:"
     echo -e "  ${BOLD}start-claude${RESET}"

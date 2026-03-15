@@ -11,7 +11,6 @@ An interactive launcher for [Claude Code](https://claude.ai/code) that supports 
 - **Auto Update** — Check and update launcher with -u flag
 - **Simple Install** — One-command install to your PATH
 - **Auto-Install** — Automatically installs Claude Code if not present
-- **Auto-Update** — Checks for and prompts to install Claude Code updates
 
 ## Supported Providers
 
@@ -53,12 +52,12 @@ chmod +x ~/.local/bin/claude-launcher
 Run the launcher:
 
 ```bash
-cl                      # Quick launch with saved config
-cl -r                  # Resume last session
-cl -r [session_id]     # Resume specific session
-cl -c                  # Interactive configuration
-cl -u                  # Check for updates
-cl -h                  # Show help
+cli                     # Quick launch with saved config
+cli -r                 # Resume last session
+cli -r [session_id]    # Resume specific session
+cli -c                 # Interactive configuration
+cli -u                 # Check for updates
+cli -h                 # Show help
 # or
 claude-launcher
 start-claude
@@ -78,8 +77,8 @@ start-claude
 The launcher saves your last project directory, so you can quickly resume your last session:
 
 ```bash
-cc -r              # Resume last session (interactive picker)
-cc -r [session_id] # Resume a specific session by ID
+cli -r              # Resume last session (interactive picker)
+cli -r [session_id] # Resume a specific session by ID
 ```
 
 ### Auto Update
@@ -87,7 +86,7 @@ cc -r [session_id] # Resume a specific session by ID
 Check for launcher updates:
 
 ```bash
-cc -u              # Check for updates and prompt to install
+cli -u              # Check for updates and prompt to install
 ```
 
 ### Configuration
