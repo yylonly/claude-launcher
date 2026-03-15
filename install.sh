@@ -83,16 +83,30 @@ else
 fi
 echo -e "${GREEN}✓ Done${RESET}"
 
+# Create cc symlink
+echo -n "Creating cc symlink... "
+TARGET_CC="${INSTALL_DIR}/cc"
+if [[ "$USE_SUDO" == true ]]; then
+    sudo ln -sf "$TARGET_FILE" "$TARGET_CC"
+else
+    ln -sf "$TARGET_FILE" "$TARGET_CC"
+fi
+echo -e "${GREEN}✓ Done${RESET}"
+
 # Verify installation
 if command -v "$INSTALL_NAME" &>/dev/null; then
     echo ""
     echo -e "${GREEN}Installation successful!${RESET}"
     echo ""
     echo "You can now run:"
-    echo -e "  ${BOLD}${INSTALL_NAME}${RESET}"
+    echo -e "  ${BOLD}cc${RESET}                 — Launch with saved config"
+    echo -e "  ${BOLD}cc -r${RESET}              — Resume last session"
+    echo -e "  ${BOLD}cc -c${RESET}            — Interactive configuration"
+    echo -e "  ${BOLD}cc -h${RESET}              — Show help"
     echo ""
     echo "Or with the full name:"
     echo -e "  ${BOLD}start-claude${RESET}"
+    echo -e "  ${BOLD}claude-launcher${RESET}"
 else
     echo ""
     echo -e "${YELLOW}Warning: ${INSTALL_NAME} not found in PATH${RESET}"
@@ -101,9 +115,9 @@ else
     echo "  export PATH=\"${INSTALL_DIR}:\${PATH}\""
 fi
 
-# Check if we should also create 'start-claude' alias
-if [[ ! -f "${INSTALL_DIR}/start-claude" ]]; then
-    echo -n "Creating start-claude alias... "
+# Create start-claude symlink if not exists
+if [[ ! -L "${INSTALL_DIR}/start-claude" && ! -f "${INSTALL_DIR}/start-claude" ]]; then
+    echo -n "Creating start-claude symlink... "
     if [[ "$USE_SUDO" == true ]]; then
         sudo ln -sf "$TARGET_FILE" "${INSTALL_DIR}/start-claude"
     else
@@ -114,5 +128,4 @@ fi
 
 echo ""
 echo "To uninstall, run:"
-echo -e "  ${BOLD}rm ${TARGET_FILE}${RESET}"
-echo -e "  ${BOLD}rm ${INSTALL_DIR}/start-claude${RESET}"
+echo -e "  ${BOLD}./uninstall.sh${RESET}"

@@ -28,6 +28,7 @@ CLAUDE_JSON="${HOME}/.claude.json"
 write_minimax_settings() {
   local api_key="$1"
   local model="$2"
+  local agent_teams="${3:-}"
   mkdir -p "${HOME}/.claude"
   # Backup original settings once
   if [[ -f "$CLAUDE_SETTINGS" && ! -f "$CLAUDE_SETTINGS_BAK" ]]; then
@@ -37,9 +38,28 @@ write_minimax_settings() {
   local escaped_key
   escaped_key="${api_key//\\/\\\\}"
   escaped_key="${escaped_key//\"/\\\"}"
-  cat > "$CLAUDE_SETTINGS" <<EOF
+
+  # Build env section
+  local env_section
+  if [[ "$agent_teams" == "1" ]]; then
+    env_section=$(cat <<ENVEOF
 {
-  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "${escaped_key}",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "ANTHROPIC_MODEL": "${model}",
+    "ANTHROPIC_SMALL_FAST_MODEL": "${model}",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${model}",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "${model}",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${model}"
+}
+ENVEOF
+)
+  else
+    env_section=$(cat <<ENVEOF
+{
     "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "${escaped_key}",
     "API_TIMEOUT_MS": "3000000",
@@ -49,7 +69,14 @@ write_minimax_settings() {
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "${model}",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "${model}",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${model}"
-  },
+}
+ENVEOF
+)
+  fi
+
+  cat > "$CLAUDE_SETTINGS" <<EOF
+{
+  "env": $env_section,
   "skipDangerousModePermissionPrompt": true
 }
 EOF
@@ -67,6 +94,7 @@ restore_settings() {
 write_bailian_settings() {
   local api_key="$1"
   local model="$2"
+  local agent_teams="${3:-}"
   mkdir -p "${HOME}/.claude"
   # Backup original settings once
   if [[ -f "$CLAUDE_SETTINGS" && ! -f "$CLAUDE_SETTINGS_BAK" ]]; then
@@ -76,9 +104,28 @@ write_bailian_settings() {
   local escaped_key
   escaped_key="${api_key//\\/\\\\}"
   escaped_key="${escaped_key//\"/\\\"}"
-  cat > "$CLAUDE_SETTINGS" <<EOF
+
+  # Build env section
+  local env_section
+  if [[ "$agent_teams" == "1" ]]; then
+    env_section=$(cat <<ENVEOF
 {
-  "env": {
+    "ANTHROPIC_BASE_URL": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "${escaped_key}",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "ANTHROPIC_MODEL": "${model}",
+    "ANTHROPIC_SMALL_FAST_MODEL": "${model}",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${model}",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "${model}",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${model}"
+}
+ENVEOF
+)
+  else
+    env_section=$(cat <<ENVEOF
+{
     "ANTHROPIC_BASE_URL": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "${escaped_key}",
     "API_TIMEOUT_MS": "3000000",
@@ -88,7 +135,14 @@ write_bailian_settings() {
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "${model}",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "${model}",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${model}"
-  },
+}
+ENVEOF
+)
+  fi
+
+  cat > "$CLAUDE_SETTINGS" <<EOF
+{
+  "env": $env_section,
   "skipDangerousModePermissionPrompt": true
 }
 EOF
@@ -118,8 +172,10 @@ load_defaults() {
   DEFAULT_MC_1=""
   DEFAULT_MC_2=""
   DEFAULT_MC_3=""
+  DEFAULT_AGENT_TEAMS="2"  # 1=yes, 2=no
   SAVED_MINIMAX_API_KEY=""
   SAVED_DASHSCOPE_API_KEY=""
+  LAST_PROJECT_DIR=""
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck source=/dev/null
     source "$CONFIG_FILE"
@@ -133,14 +189,22 @@ load_defaults() {
 trap 'restore_settings; exit 130' INT TERM
 
 save_defaults() {
+  # Determine project directory (current working directory or saved)
+  if [[ -n "$LAST_PROJECT_DIR" ]]; then
+    PROJECT_DIR="$LAST_PROJECT_DIR"
+  else
+    PROJECT_DIR="$(pwd)"
+  fi
   # Quote API keys to preserve special characters
   cat > "$CONFIG_FILE" <<EOF
 DEFAULT_PLAN=$PLAN_CHOICE
 DEFAULT_MC_1=$DEFAULT_MC_1
 DEFAULT_MC_2=$DEFAULT_MC_2
 DEFAULT_MC_3=$DEFAULT_MC_3
+DEFAULT_AGENT_TEAMS=$AGENT_TEAMS_CHOICE
 SAVED_MINIMAX_API_KEY="${MINIMAX_API_KEY:-}"
 SAVED_DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}"
+LAST_PROJECT_DIR="$PROJECT_DIR"
 EOF
   chmod 600 "$CONFIG_FILE"
 }
@@ -302,16 +366,320 @@ check_claude_code() {
   sleep 1
 }
 
+# ─── Quick launch with saved config ─────────────────────────────────────────
+quick_launch() {
+  PLAN_CHOICE="$DEFAULT_PLAN"
+  AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"
+
+  # Save current directory for resume
+  LAST_PROJECT_DIR="$(pwd)"
+
+  SELECTED_MODEL=""
+  PROVIDER=""
+  BASE_URL=""
+  API_KEY_VAR=""
+  EXTRA_ARGS=()
+
+  case "$PLAN_CHOICE" in
+    1)  # Anthropic
+      PROVIDER="anthropic"
+      restore_settings
+      case "${DEFAULT_MC_1:-2}" in
+        1) SELECTED_MODEL="claude-opus-4-6" ;;
+        2) SELECTED_MODEL="claude-sonnet-4-6" ;;
+        3) SELECTED_MODEL="claude-haiku-4-5-20251001" ;;
+        *) SELECTED_MODEL="claude-sonnet-4-6" ;;
+      esac
+      EXTRA_ARGS+=(--effort high)
+      ;;
+
+    2)  # MiniMaxi
+      PROVIDER="minimaxi"
+      BASE_URL="https://api.minimaxi.com/anthropic"
+      API_KEY_VAR="MINIMAX_API_KEY"
+
+      if [[ -z "${!API_KEY_VAR:-}" ]]; then
+        echo -e "${RED}Error: MiniMax API key not found.${RESET}"
+        echo "Run with -c to configure."
+        exit 1
+      fi
+
+      case "${DEFAULT_MC_2:-1}" in
+        1) SELECTED_MODEL="MiniMax-M2.5" ;;
+        2) SELECTED_MODEL="MiniMax-M2.5-highspeed" ;;
+        3) SELECTED_MODEL="MiniMax-M2.1" ;;
+        4) SELECTED_MODEL="MiniMax-M2" ;;
+        *) SELECTED_MODEL="MiniMax-M2.5" ;;
+      esac
+
+      write_minimax_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
+      ensure_onboarding
+
+      EXTRA_ARGS+=(
+        --effort medium
+        --append-system-prompt "You are using the MiniMax API. Leverage MiniMax model strengths for text generation, reasoning, and code tasks."
+      )
+      ;;
+
+    3)  # Bailian
+      PROVIDER="bailian"
+      BASE_URL="https://coding.dashscope.aliyuncs.com/apps/anthropic"
+      API_KEY_VAR="DASHSCOPE_API_KEY"
+      restore_settings
+
+      if [[ -z "${!API_KEY_VAR:-}" ]]; then
+        echo -e "${RED}Error: DashScope API key not found.${RESET}"
+        echo "Run with -c to configure."
+        exit 1
+      fi
+
+      case "${DEFAULT_MC_3:-1}" in
+        1) SELECTED_MODEL="kimi-k2.5" ;;
+        2) SELECTED_MODEL="glm-5" ;;
+        3) SELECTED_MODEL="qwen3-max-2026-01-23" ;;
+        4) SELECTED_MODEL="qwen3-coder-next" ;;
+        5) SELECTED_MODEL="qwen3-coder-plus" ;;
+        6) SELECTED_MODEL="glm-4.7" ;;
+        7) SELECTED_MODEL="qwen3-flash" ;;
+        8) SELECTED_MODEL="qwen-turbo" ;;
+        9) SELECTED_MODEL="qwen-long" ;;
+        10) SELECTED_MODEL="qwq-plus" ;;
+        *) SELECTED_MODEL="qwen3-max-2026-01-23" ;;
+      esac
+
+      write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
+      ensure_onboarding
+
+      EXTRA_ARGS+=(
+        --effort medium
+        --append-system-prompt "You are using Alibaba Bailian (DashScope) with Qwen models. Leverage Qwen's strengths in multilingual tasks, long-context understanding, and coding."
+      )
+      ;;
+
+    *)
+      echo -e "${RED}Invalid provider in config: $DEFAULT_PLAN${RESET}"
+      echo "Run with -c to reconfigure."
+      exit 1
+      ;;
+  esac
+
+  # Set environment variables
+  if [[ "$PROVIDER" != "anthropic" ]]; then
+    export ANTHROPIC_BASE_URL="$BASE_URL"
+    export ANTHROPIC_AUTH_TOKEN="${!API_KEY_VAR}"
+  fi
+
+  if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
+    export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="1"
+  fi
+
+  if [[ "$PROVIDER" == "minimaxi" ]]; then
+    export API_TIMEOUT_MS="3000000"
+    export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+    export ANTHROPIC_MODEL="$SELECTED_MODEL"
+    export ANTHROPIC_SMALL_FAST_MODEL="$SELECTED_MODEL"
+    export ANTHROPIC_DEFAULT_SONNET_MODEL="$SELECTED_MODEL"
+    export ANTHROPIC_DEFAULT_OPUS_MODEL="$SELECTED_MODEL"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="$SELECTED_MODEL"
+  fi
+
+  PROVIDER_NAMES=("" "Claude Code" "MiniMaxi" "Bailian")
+  PROVIDER_LABEL="${PROVIDER_NAMES[$PLAN_CHOICE]}"
+
+  echo -e "${CYAN}${BOLD}  Starting Claude Code${RESET}"
+  echo -e "  ${DIM}Provider:${RESET} ${YELLOW}${PROVIDER_LABEL}${RESET}"
+  echo -e "  ${DIM}Model   :${RESET} ${BLUE}${SELECTED_MODEL}${RESET}"
+  [[ -n "$BASE_URL" ]] && echo -e "  ${DIM}Endpoint:${RESET} ${DIM}${BASE_URL}${RESET}"
+  if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
+    echo -e "  ${DIM}Agent   :${RESET} ${GREEN}Enabled${RESET}"
+  fi
+  echo ""
+
+  # Save config including project directory for resume
+  save_defaults
+
+  exec claude --model "$SELECTED_MODEL" --dangerously-skip-permissions "${EXTRA_ARGS[@]}"
+}
+
+# ─── Main: Handle arguments ─────────────────────────────────────────────────
+RESUME_MODE=0
+RESUME_SESSION=""
+CONF_MODE=0
+if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
+  echo ""
+  echo -e "${BOLD}Claude Code Launcher${RESET}"
+  echo ""
+  echo "Usage:"
+  echo -e "  ${GREEN}cc${RESET}                 # Quick launch with saved configuration"
+  echo -e "  ${GREEN}cc -r${RESET}             # Resume last session (interactive picker)"
+  echo -e "  ${GREEN}cc -r [id]${RESET}        # Resume specific session by ID"
+  echo -e "  ${GREEN}cc -c${RESET}             # Interactive configuration"
+  echo -e "  ${GREEN}cc -h${RESET}             # Show this help message"
+  echo ""
+  echo "Options:"
+  echo "  -r, --resume [id]  Resume a session (optional: session ID)"
+  echo "  -c                 Show interactive configuration menu"
+  echo "  -h, --help         Show this help message"
+  echo ""
+  echo "Examples:"
+  echo "  cc                  # Launch with last used provider/model"
+  echo "  cc -r               # Resume last session"
+  echo "  cc -r abc123        # Resume session abc123"
+  echo "  cc -c               # Change provider/model/API key"
+  echo ""
+  exit 0
+elif [[ "${1:-}" == "-r" ]] || [[ "${1:-}" == "--resume" ]]; then
+  RESUME_MODE=1
+  RESUME_SESSION="${2:-}"
+elif [[ "${1:-}" == "--resume" ]] && [[ -n "${2:-}" ]]; then
+  RESUME_MODE=1
+  RESUME_SESSION="${2:-}"
+elif [[ "${1:-}" == "-c" ]]; then
+  # Run interactive configuration
+  CONF_MODE=1
+elif [[ -n "${1:-}" ]]; then
+  # Unknown argument, show help
+  echo "Usage: $0           # Launch with saved configuration"
+  echo "       $0 -r [id]   # Resume last session (optional: session ID)"
+  echo "       $0 -c         # Show interactive configuration"
+  echo "       $0 -h         # Show help message"
+  exit 0
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Load saved defaults
 # ─────────────────────────────────────────────────────────────────────────────
 load_defaults
 
+# Check if config exists - auto-switch to interactive if no config
+if [[ "$CONF_MODE" -eq 0 && -z "$DEFAULT_PLAN" ]]; then
+  echo -e "${YELLOW}No saved configuration found.${RESET}"
+  echo "Starting interactive configuration..."
+  sleep 1
+  CONF_MODE=1
+fi
+
 # ─── Check Claude Code installation before proceeding ──────────────────────────
 check_claude_code
 
+# ─── Resume mode: restore last session ─────────────────────────────────────────
+if [[ "$RESUME_MODE" -eq 1 ]]; then
+  # Load config first to get provider settings
+  load_defaults
+
+  # Determine project directory
+  PROJECT_DIR="${LAST_PROJECT_DIR:-$(pwd)}"
+
+  if [[ ! -d "$PROJECT_DIR" ]]; then
+    echo -e "${YELLOW}Project directory not found:${RESET} $PROJECT_DIR"
+    echo "Using current directory instead."
+    PROJECT_DIR="$(pwd)"
+  fi
+
+  cd "$PROJECT_DIR"
+
+  # Build resume command
+  RESUME_ARGS=()
+  if [[ -n "$RESUME_SESSION" ]]; then
+    RESUME_ARGS+=("--resume" "$RESUME_SESSION")
+  else
+    RESUME_ARGS+=("--resume")
+  fi
+
+  # Apply saved provider settings (same as quick_launch but for resume)
+  AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"
+
+  case "$DEFAULT_PLAN" in
+    1)  # Anthropic
+      PROVIDER="anthropic"
+      restore_settings
+      case "${DEFAULT_MC_1:-2}" in
+        1) SELECTED_MODEL="claude-opus-4-6" ;;
+        2) SELECTED_MODEL="claude-sonnet-4-6" ;;
+        3) SELECTED_MODEL="claude-haiku-4-5-20251001" ;;
+        *) SELECTED_MODEL="claude-sonnet-4-6" ;;
+      esac
+      ;;
+    2)  # MiniMaxi
+      PROVIDER="minimaxi"
+      if [[ -z "${MINIMAX_API_KEY:-}" ]]; then
+        echo -e "${RED}Error: MiniMax API key not found.${RESET}"
+        echo "Run with -c to configure."
+        exit 1
+      fi
+      case "${DEFAULT_MC_2:-1}" in
+        1) SELECTED_MODEL="MiniMax-M2.5" ;;
+        2) SELECTED_MODEL="MiniMax-M2.5-highspeed" ;;
+        3) SELECTED_MODEL="MiniMax-M2.1" ;;
+        4) SELECTED_MODEL="MiniMax-M2" ;;
+        *) SELECTED_MODEL="MiniMax-M2.5" ;;
+      esac
+      write_minimax_settings "$MINIMAX_API_KEY" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
+      ensure_onboarding
+      export ANTHROPIC_BASE_URL="https://api.minimaxi.com/anthropic"
+      export ANTHROPIC_AUTH_TOKEN="$MINIMAX_API_KEY"
+      export API_TIMEOUT_MS="3000000"
+      export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+      export ANTHROPIC_MODEL="$SELECTED_MODEL"
+      export ANTHROPIC_SMALL_FAST_MODEL="$SELECTED_MODEL"
+      export ANTHROPIC_DEFAULT_SONNET_MODEL="$SELECTED_MODEL"
+      export ANTHROPIC_DEFAULT_OPUS_MODEL="$SELECTED_MODEL"
+      export ANTHROPIC_DEFAULT_HAIKU_MODEL="$SELECTED_MODEL"
+      ;;
+    3)  # Bailian
+      PROVIDER="bailian"
+      if [[ -z "${DASHSCOPE_API_KEY:-}" ]]; then
+        echo -e "${RED}Error: DashScope API key not found.${RESET}"
+        echo "Run with -c to configure."
+        exit 1
+      fi
+      case "${DEFAULT_MC_3:-1}" in
+        1) SELECTED_MODEL="kimi-k2.5" ;;
+        2) SELECTED_MODEL="glm-5" ;;
+        3) SELECTED_MODEL="qwen3-max-2026-01-23" ;;
+        4) SELECTED_MODEL="qwen3-coder-next" ;;
+        5) SELECTED_MODEL="qwen3-coder-plus" ;;
+        6) SELECTED_MODEL="glm-4.7" ;;
+        7) SELECTED_MODEL="qwen3-flash" ;;
+        8) SELECTED_MODEL="qwen-turbo" ;;
+        9) SELECTED_MODEL="qwen-long" ;;
+        10) SELECTED_MODEL="qwq-plus" ;;
+        *) SELECTED_MODEL="qwen3-max-2026-01-23" ;;
+      esac
+      write_bailian_settings "$DASHSCOPE_API_KEY" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
+      ensure_onboarding
+      export ANTHROPIC_BASE_URL="https://coding.dashscope.aliyuncs.com/apps/anthropic"
+      export ANTHROPIC_AUTH_TOKEN="$DASHSCOPE_API_KEY"
+      ;;
+  esac
+
+  if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
+    export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="1"
+  fi
+
+  PROVIDER_NAMES=("" "Claude Code" "MiniMaxi" "Bailian")
+  PROVIDER_LABEL="${PROVIDER_NAMES[$DEFAULT_PLAN]}"
+
+  echo -e "${CYAN}${BOLD}  Resuming Claude Code Session${RESET}"
+  echo -e "  ${DIM}Provider:${RESET} ${YELLOW}${PROVIDER_LABEL}${RESET}"
+  echo -e "  ${DIM}Model   :${RESET} ${BLUE}${SELECTED_MODEL}${RESET}"
+  echo -e "  ${DIM}Project :${RESET} ${DIM}${PROJECT_DIR}${RESET}"
+  if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
+    echo -e "  ${DIM}Agent   :${RESET} ${GREEN}Enabled${RESET}"
+  fi
+  echo ""
+
+  exec claude --model "$SELECTED_MODEL" --dangerously-skip-permissions "${RESUME_ARGS[@]}"
+fi
+
+# Quick launch if no conf mode
+if [[ "$CONF_MODE" -eq 0 ]]; then
+  quick_launch
+  exit 0
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  STEP 1 — Select Provider
+#  STEP 1 — Select Provider (interactive)
 # ─────────────────────────────────────────────────────────────────────────────
 print_header
 print_menu "Select Provider:" \
@@ -331,6 +699,7 @@ PROVIDER="anthropic"         # anthropic | minimaxi | bailian
 BASE_URL=""
 API_KEY_VAR=""
 EXTRA_ARGS=()
+AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"  # Default to disabled
 
 case "$PLAN_CHOICE" in
 
@@ -376,7 +745,7 @@ case "$PLAN_CHOICE" in
       4) SELECTED_MODEL="MiniMax-M2" ;;
     esac
 
-    write_minimax_settings "${MINIMAX_API_KEY}" "${SELECTED_MODEL}"
+    write_minimax_settings "${MINIMAX_API_KEY}" "${SELECTED_MODEL}" "${AGENT_TEAMS_CHOICE}"
     ensure_onboarding
 
     EXTRA_ARGS+=(
@@ -419,7 +788,7 @@ case "$PLAN_CHOICE" in
     esac
 
     # Write Bailian settings for Claude Code (after model is selected)
-    write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL"
+    write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "${AGENT_TEAMS_CHOICE}"
     ensure_onboarding
 
     EXTRA_ARGS+=(
@@ -428,6 +797,13 @@ case "$PLAN_CHOICE" in
     ) ;;
 
 esac
+
+# ─── Step 2.5 — Agent Teams Option ───────────────────────────────────────────
+echo ""
+print_menu "Enable Agent Teams?" \
+  "[Yes] Enable Agent Teams  — Coordinate multiple Claude instances working together" \
+  "[No]  Disable (default)   — Standard single session"
+AGENT_TEAMS_CHOICE=$(pick "Agent Teams" 2 "$DEFAULT_AGENT_TEAMS")
 
 # ─── Save choices for next run ────────────────────────────────────────────────
 save_defaults
@@ -438,6 +814,11 @@ save_defaults
 if [[ "$PROVIDER" != "anthropic" ]]; then
   export ANTHROPIC_BASE_URL="$BASE_URL"
   export ANTHROPIC_AUTH_TOKEN="${!API_KEY_VAR}"
+fi
+
+# Agent Teams support for all providers
+if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
+  export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="1"
 fi
 
 if [[ "$PROVIDER" == "minimaxi" ]]; then
@@ -453,12 +834,19 @@ fi
 PROVIDER_NAMES=("" "Claude Code" "MiniMaxi" "Bailian")
 PROVIDER_LABEL="${PROVIDER_NAMES[$PLAN_CHOICE]}"
 
+# Save project directory for resume
+LAST_PROJECT_DIR="$(pwd)"
+save_defaults
+
 # ─── Summary & Launch ────────────────────────────────────────────────────────
 echo ""
 echo -e "${CYAN}${BOLD}  Starting Claude Code${RESET}"
 echo -e "  ${DIM}Provider:${RESET} ${YELLOW}${PROVIDER_LABEL}${RESET}"
 echo -e "  ${DIM}Model   :${RESET} ${BLUE}${SELECTED_MODEL}${RESET}"
 [[ -n "$BASE_URL" ]] && echo -e "  ${DIM}Endpoint:${RESET} ${DIM}${BASE_URL}${RESET}"
+if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
+  echo -e "  ${DIM}Agent   :${RESET} ${GREEN}Enabled${RESET}"
+fi
 echo ""
 echo -e "  ${DIM}Press Ctrl+C to cancel...${RESET}"
 sleep 1

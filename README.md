@@ -7,6 +7,7 @@ An interactive launcher for [Claude Code](https://claude.ai/code) that supports 
 - **Multiple Providers** — Switch between Anthropic, MiniMaxi, and Bailian (DashScope)
 - **Easy Configuration** — Save API keys and preferred models
 - **Quick Launch** — Start Claude Code with your chosen provider in seconds
+- **Session Resume** — Resume last session with -r flag
 - **Simple Install** — One-command install to your PATH
 - **Auto-Install** — Automatically installs Claude Code if not present
 - **Auto-Update** — Checks for and prompts to install Claude Code updates
@@ -15,9 +16,9 @@ An interactive launcher for [Claude Code](https://claude.ai/code) that supports 
 
 | Provider | Models |
 |----------|--------|
-| **Anthropic** | Claude 3 Opus, Sonnet, Haiku |
-| **MiniMaxi** | MiniMax-Text-01 |
-| **Bailian/DashScope** | Qwen-Max, Qwen-Coder, Qwen-Plus |
+| **Anthropic** | Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 |
+| **MiniMaxi** | MiniMax-M2.5, M2.5-highspeed, M2.1, M2 |
+| **Bailian/DashScope** | Kimi-K2.5, GLM-5, Qwen3-Max, Qwen3-Coder, GLM-4.7, Qwen3-Flash, Qwen-Turbo, Qwen-Long, QwQ-Plus |
 
 ## Installation
 
@@ -45,8 +46,13 @@ chmod +x ~/.local/bin/claude-launcher
 Run the launcher:
 
 ```bash
-claude-launcher
+cc                      # Quick launch with saved config
+cc -r                  # Resume last session
+cc -r [session_id]     # Resume specific session
+cc -c                  # Interactive configuration
+cc -h                  # Show help
 # or
+claude-launcher
 start-claude
 ```
 
@@ -59,10 +65,19 @@ start-claude
 5. Enter your API key (or use saved key)
 6. Claude Code launches with your selected configuration
 
+### Session Resume
+
+The launcher saves your last project directory, so you can quickly resume your last session:
+
+```bash
+cc -r              # Resume last session (interactive picker)
+cc -r [session_id] # Resume a specific session by ID
+```
+
 ### Configuration
 
 Your settings are saved to:
-- `~/.claude-launcher.conf` — Provider, model, and API keys
+- `~/.claude-launcher.conf` — Provider, model, API keys, and last project directory
 - `~/.claude/settings.json` — Claude Code configuration
 
 Original settings are backed up to `~/.claude/settings.json.launcher-bak`

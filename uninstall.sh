@@ -51,6 +51,9 @@ if [[ -n "$INSTALL_DIR" && -d "$INSTALL_DIR" ]]; then
     if [[ -L "${INSTALL_DIR}/${ALIAS_NAME}" ]]; then
         FOUND_FILES+=("${INSTALL_DIR}/${ALIAS_NAME}")
     fi
+    if [[ -L "${INSTALL_DIR}/cc" ]]; then
+        FOUND_FILES+=("${INSTALL_DIR}/cc")
+    fi
 fi
 
 # Check for config files
