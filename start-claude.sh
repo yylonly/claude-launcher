@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.0.0"
+VERSION="1.1.0"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -76,52 +76,30 @@ write_minimax_settings() {
   if [[ -f "$CLAUDE_SETTINGS" && ! -f "$CLAUDE_SETTINGS_BAK" ]]; then
     cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS_BAK"
   fi
-  # Escape backslashes and quotes in api_key for JSON
-  local escaped_key
-  escaped_key="${api_key//\\/\\\\}"
-  escaped_key="${escaped_key//\"/\\\"}"
 
-  # Build env section
-  local env_section
+  # Build env JSON
+  local env_json
   if [[ "$agent_teams" == "1" ]]; then
-    env_section=$(cat <<ENVEOF
-{
-    "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "${escaped_key}",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "ANTHROPIC_MODEL": "${model}",
-    "ANTHROPIC_SMALL_FAST_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${model}"
-}
-ENVEOF
-)
+    env_json="{\"ANTHROPIC_BASE_URL\": \"https://api.minimaxi.com/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\"}"
   else
-    env_section=$(cat <<ENVEOF
-{
-    "ANTHROPIC_BASE_URL": "https://api.minimaxi.com/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "${escaped_key}",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "ANTHROPIC_MODEL": "${model}",
-    "ANTHROPIC_SMALL_FAST_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${model}"
-}
-ENVEOF
-)
+    env_json="{\"ANTHROPIC_BASE_URL\": \"https://api.minimaxi.com/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\"}"
   fi
 
-  cat > "$CLAUDE_SETTINGS" <<EOF
-{
-  "env": $env_section,
-  "skipDangerousModePermissionPrompt": true
-}
-EOF
+  # Merge with existing settings using python (preserve other config)
+  python3 - "$CLAUDE_SETTINGS" "$env_json" <<'PYEOF'
+import json, sys
+settings_path, env_json = sys.argv[1], sys.argv[2]
+env = json.loads(env_json)
+try:
+    with open(settings_path) as f:
+        settings = json.load(f)
+except:
+    settings = {}
+settings['env'] = env
+settings['skipDangerousModePermissionPrompt'] = True
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+PYEOF
   chmod 600 "$CLAUDE_SETTINGS"
 }
 
@@ -142,52 +120,30 @@ write_bailian_settings() {
   if [[ -f "$CLAUDE_SETTINGS" && ! -f "$CLAUDE_SETTINGS_BAK" ]]; then
     cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS_BAK"
   fi
-  # Escape backslashes and quotes in api_key for JSON
-  local escaped_key
-  escaped_key="${api_key//\\/\\\\}"
-  escaped_key="${escaped_key//\"/\\\"}"
 
-  # Build env section
-  local env_section
+  # Build env JSON
+  local env_json
   if [[ "$agent_teams" == "1" ]]; then
-    env_section=$(cat <<ENVEOF
-{
-    "ANTHROPIC_BASE_URL": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "${escaped_key}",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "ANTHROPIC_MODEL": "${model}",
-    "ANTHROPIC_SMALL_FAST_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${model}"
-}
-ENVEOF
-)
+    env_json="{\"ANTHROPIC_BASE_URL\": \"https://coding.dashscope.aliyuncs.com/apps/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\"}"
   else
-    env_section=$(cat <<ENVEOF
-{
-    "ANTHROPIC_BASE_URL": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "${escaped_key}",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "ANTHROPIC_MODEL": "${model}",
-    "ANTHROPIC_SMALL_FAST_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "${model}",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${model}"
-}
-ENVEOF
-)
+    env_json="{\"ANTHROPIC_BASE_URL\": \"https://coding.dashscope.aliyuncs.com/apps/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\"}"
   fi
 
-  cat > "$CLAUDE_SETTINGS" <<EOF
-{
-  "env": $env_section,
-  "skipDangerousModePermissionPrompt": true
-}
-EOF
+  # Merge with existing settings using python (preserve other config)
+  python3 - "$CLAUDE_SETTINGS" "$env_json" <<'PYEOF'
+import json, sys
+settings_path, env_json = sys.argv[1], sys.argv[2]
+env = json.loads(env_json)
+try:
+    with open(settings_path) as f:
+        settings = json.load(f)
+except:
+    settings = {}
+settings['env'] = env
+settings['skipDangerousModePermissionPrompt'] = True
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+PYEOF
   chmod 600 "$CLAUDE_SETTINGS"
 }
 
@@ -215,6 +171,7 @@ load_defaults() {
   DEFAULT_MC_2=""
   DEFAULT_MC_3=""
   DEFAULT_AGENT_TEAMS="2"  # 1=yes, 2=no
+  DEFAULT_CLAUDE_HUD="1"   # 1=install, 2=skip
   SAVED_MINIMAX_API_KEY=""
   SAVED_DASHSCOPE_API_KEY=""
   LAST_PROJECT_DIR=""
@@ -222,6 +179,8 @@ load_defaults() {
     # shellcheck source=/dev/null
     source "$CONFIG_FILE"
   fi
+  # Ensure CLAUDE_HUD has a default if not in config
+  DEFAULT_CLAUDE_HUD="${DEFAULT_CLAUDE_HUD:-1}"
   # Pre-populate env vars from saved keys if not already set
   if [[ -z "${MINIMAX_API_KEY:-}" && -n "$SAVED_MINIMAX_API_KEY" ]]; then export MINIMAX_API_KEY="$SAVED_MINIMAX_API_KEY"; fi
   if [[ -z "${DASHSCOPE_API_KEY:-}" && -n "$SAVED_DASHSCOPE_API_KEY" ]]; then export DASHSCOPE_API_KEY="$SAVED_DASHSCOPE_API_KEY"; fi
@@ -244,6 +203,7 @@ DEFAULT_MC_1=$DEFAULT_MC_1
 DEFAULT_MC_2=$DEFAULT_MC_2
 DEFAULT_MC_3=$DEFAULT_MC_3
 DEFAULT_AGENT_TEAMS=$AGENT_TEAMS_CHOICE
+DEFAULT_CLAUDE_HUD=$CLAUDE_HUD_CHOICE
 SAVED_MINIMAX_API_KEY="${MINIMAX_API_KEY:-}"
 SAVED_DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}"
 LAST_PROJECT_DIR="$PROJECT_DIR"
@@ -368,50 +328,177 @@ check_claude_code() {
     echo -e "  ${DIM}Current version:${RESET} ${current_version}"
     echo ""
 
-    # Check for updates (non-blocking, just informative)
+    # Check for updates via GitHub API
     echo -e "  ${DIM}Checking for updates...${RESET}"
-    if claude update --dry-run &>/dev/null 2>&1; then
-      # Try to run actual update check
-      if ! claude update --check &>/dev/null 2>&1; then
-        # Alternative: try to get latest version info
-        local latest_version
-        latest_version=$(curl -s https://api.github.com/repos/anthropics/claude-code/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+"' | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || echo "")
+    local latest_version
+    latest_version=$(curl -s https://api.github.com/repos/anthropics/claude-code/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+"' | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || echo "")
 
-        if [[ -n "$latest_version" && "$latest_version" != "$current_version" ]]; then
-          echo ""
-          echo -e "${YELLOW}Update available:${RESET} ${current_version} → ${GREEN}${latest_version}${RESET}"
-          read -rp "  Update now? [y/N]: " update_choice
-          echo ""
+    if [[ -n "$latest_version" && "$latest_version" != "$current_version" ]]; then
+      echo ""
+      echo -e "${YELLOW}Update available:${RESET} ${current_version} → ${GREEN}${latest_version}${RESET}"
+      read -rp "  Update now? [y/N]: " update_choice
+      echo ""
 
-          if [[ "$update_choice" =~ ^[Yy]$ ]]; then
-            echo -e "${CYAN}Updating Claude Code...${RESET}"
-            if claude update; then
-              echo ""
-              echo -e "${GREEN}✓ Update successful!${RESET}"
-            else
-              echo ""
-              echo -e "${YELLOW}Update failed. You can retry later with:${RESET} claude update"
-            fi
-            echo ""
-          fi
+      if [[ "$update_choice" =~ ^[Yy]$ ]]; then
+        echo -e "${CYAN}Updating Claude Code...${RESET}"
+        if claude update; then
+          echo ""
+          echo -e "${GREEN}✓ Update successful!${RESET}"
         else
-          echo -e "  ${GREEN}✓ Up to date${RESET}"
           echo ""
+          echo -e "${YELLOW}Update failed. You can retry later with:${RESET} claude update"
         fi
-      else
-        echo -e "  ${GREEN}✓ Up to date${RESET}"
         echo ""
       fi
+    else
+      echo -e "  ${GREEN}✓ Up to date${RESET}"
+      echo ""
     fi
+
+    # Check plugin marketplace for updates
+    echo -e "  ${DIM}Checking plugin marketplace...${RESET}"
+    if claude plugin marketplace update 2>/dev/null; then
+      echo -e "  ${GREEN}✓ Marketplace up to date${RESET}"
+    else
+      echo -e "  ${YELLOW}⚠ Marketplace check failed${RESET}"
+    fi
+    echo ""
+
+    # Check for plugin updates - list first, then update each
+    echo -e "  ${DIM}Checking plugin updates...${RESET}"
+    local plugin_list
+    plugin_list=$(claude plugin list 2>/dev/null | grep -oE '@[a-zA-Z0-9_-]+' | tr -d '@' || true)
+    if [[ -n "$plugin_list" ]]; then
+      for plugin in $plugin_list; do
+        echo -e "  ${DIM}Updating plugin: ${plugin}${RESET}"
+        claude plugin update "$plugin" 2>/dev/null || true
+      done
+      echo -e "  ${GREEN}✓ Plugins updated${RESET}"
+    else
+      echo -e "  ${GREEN}✓ No plugins to update${RESET}"
+    fi
+    echo ""
   fi
 
   sleep 1
+}
+
+# ─── Claude-hud plugin check and install ─────────────────────────────────────
+check_claude_hud() {
+  echo -e "${CYAN}${BOLD}  Checking Claude-hud plugin...${RESET}"
+
+  local plugin_repo="jarrodwatts/claude-hud"
+
+  # Try to add marketplace, install and enable plugin
+  # Commands are idempotent - safe to run even if already installed
+  echo -e "${CYAN}Setting up Claude-hud plugin...${RESET}"
+  claude plugin marketplace add "$plugin_repo" 2>/dev/null || true
+  claude plugin install claude-hud 2>/dev/null || true
+  claude plugin enable claude-hud 2>/dev/null || true
+
+  # Configure the plugin with all features enabled
+  configure_claude_hud_all_features
+
+  echo -e "  ${GREEN}✓${RESET} Claude-hud plugin is ready (all features enabled)"
+  echo ""
+  sleep 1
+}
+
+# ─── Configure Claude-hud plugin with all features ───────────────────────────
+configure_claude_hud_all_features() {
+  echo -e "${CYAN}Configuring Claude-hud with all features...${RESET}"
+
+  mkdir -p "${HOME}/.claude"
+
+  # Backup original settings once
+  if [[ -f "$CLAUDE_SETTINGS" && ! -f "$CLAUDE_SETTINGS_BAK" ]]; then
+    cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS_BAK"
+  fi
+
+  # Get runtime path (prefer bun, fallback to node)
+  local runtime_path
+  runtime_path=$(command -v bun 2>/dev/null || command -v node 2>/dev/null)
+
+  if [[ -z "$runtime_path" ]]; then
+    echo -e "${YELLOW}⚠ No runtime found (bun/node), skipping HUD config${RESET}"
+    return 1
+  fi
+
+  # Generate dynamic command that finds latest plugin version
+  local statusline_cmd="bash -c 'plugin_dir=\$(ls -d \"\$HOME\"/.claude/plugins/cache/claude-hud/claude-hud/*/ 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1); exec \"${runtime_path}\" \"\${plugin_dir}src/index.ts\"'"
+
+  # Use python to merge settings
+  python3 - "$CLAUDE_SETTINGS" "$statusline_cmd" <<'PYEOF'
+import json
+import sys
+
+settings_path = sys.argv[1]
+statusline_cmd = sys.argv[2]
+
+settings = {}
+try:
+    with open(settings_path) as f:
+        settings = json.load(f)
+except:
+    pass
+
+# Ensure enabledPlugins exists
+if 'enabledPlugins' not in settings:
+    settings['enabledPlugins'] = {}
+
+# Add claude-hud to enabled plugins (both formats)
+settings['enabledPlugins']['claude-hud'] = True
+settings['enabledPlugins']['claude-hud@claude-hud'] = True
+
+# Add extraKnownMarketplaces
+if 'extraKnownMarketplaces' not in settings:
+    settings['extraKnownMarketplaces'] = {}
+settings['extraKnownMarketplaces']['claude-hud'] = {
+    "source": {
+        "source": "github",
+        "repo": "jarrodwatts/claude-hud"
+    }
+}
+
+# Set statusLine with dynamic version lookup
+settings['statusLine'] = {
+    "type": "command",
+    "command": statusline_cmd
+}
+
+# Ensure skipDangerousModePermissionPrompt is set
+settings['skipDangerousModePermissionPrompt'] = True
+
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+PYEOF
+
+  # Create config file with all features enabled
+  local plugin_config_dir="${HOME}/.claude/plugins/claude-hud"
+  mkdir -p "$plugin_config_dir"
+
+  cat > "$plugin_config_dir/config.json" <<EOF
+{
+  "display": {
+    "showTools": true,
+    "showAgents": true,
+    "showTodos": true,
+    "showDuration": true,
+    "showConfigCounts": true,
+    "showSessionName": true
+  }
+}
+EOF
+
+  chmod 600 "$CLAUDE_SETTINGS"
+  echo -e "${GREEN}✓ Claude-hud configured with all features!${RESET}"
 }
 
 # ─── Quick launch with saved config ─────────────────────────────────────────
 quick_launch() {
   PLAN_CHOICE="$DEFAULT_PLAN"
   AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"
+  CLAUDE_HUD_CHOICE="${DEFAULT_CLAUDE_HUD:-1}"
 
   # Save current directory for resume
   LAST_PROJECT_DIR="$(pwd)"
@@ -537,6 +624,11 @@ quick_launch() {
   fi
   echo ""
 
+  # Install claude-hud if enabled in config
+  if [[ "$CLAUDE_HUD_CHOICE" == "1" ]]; then
+    check_claude_hud
+  fi
+
   # Save config including project directory for resume
   save_defaults
 
@@ -607,8 +699,10 @@ if [[ "$CONF_MODE" -eq 0 && -z "$DEFAULT_PLAN" ]]; then
   CONF_MODE=1
 fi
 
-# ─── Check Claude Code installation before proceeding ──────────────────────────
-check_claude_code
+# ─── In config mode: check Claude Code ────────────────────────────────────────
+if [[ "$CONF_MODE" -eq 1 ]]; then
+  check_claude_code
+fi
 
 # ─── Resume mode: restore last session ─────────────────────────────────────────
 if [[ "$RESUME_MODE" -eq 1 ]]; then
@@ -852,6 +946,18 @@ print_menu "Enable Agent Teams?" \
   "[Yes] Enable Agent Teams  — Coordinate multiple Claude instances working together" \
   "[No]  Disable (default)   — Standard single session"
 AGENT_TEAMS_CHOICE=$(pick "Agent Teams" 2 "$DEFAULT_AGENT_TEAMS")
+
+# ─── Step 2.6 — Claude-HUD Option ─────────────────────────────────────────────
+echo ""
+print_menu "Install Claude-HUD?" \
+  "[Yes] Install (default)   — Install claude-hud plugin with all features" \
+  "[No]  Skip                — Do not install claude-hud"
+CLAUDE_HUD_CHOICE=$(pick "Claude-HUD" 2 "$DEFAULT_CLAUDE_HUD")
+
+# Install or skip claude-hud based on user choice
+if [[ "$CLAUDE_HUD_CHOICE" == "1" ]]; then
+  check_claude_hud
+fi
 
 # ─── Save choices for next run ────────────────────────────────────────────────
 save_defaults

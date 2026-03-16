@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# Version
+VERSION="1.1.0"
+
 # Colors
 BOLD='\033[1m'
 GREEN='\033[32m'

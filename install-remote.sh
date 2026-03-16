@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+# Version
+VERSION="1.1.0"
+
 INSTALL_NAME="claude-launcher"
 INSTALL_DIR="${HOME}/.local/bin"
 SCRIPT_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
