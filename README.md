@@ -21,6 +21,7 @@ claude-launcher/
 ├── install-remote.sh   # One-liner remote installation
 ├── uninstall.sh        # Uninstallation script
 ├── delete-plugin.sh    # Plugin deletion utility
+├── delete-mcp.sh      # MCP server deletion utility
 ├── README.md           # This file
 └── CLAUDE.md           # Claude Code configuration guide
 ```

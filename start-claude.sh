@@ -172,8 +172,12 @@ load_defaults() {
   DEFAULT_MC_3=""
   DEFAULT_AGENT_TEAMS="2"  # 1=yes, 2=no
   DEFAULT_CLAUDE_HUD="1"   # 1=install, 2=skip
+  DEFAULT_BRAVE_SEARCH="2" # 1=enable, 2=skip
+  DEFAULT_TAVILY_SEARCH="2" # 1=enable, 2=skip
   SAVED_MINIMAX_API_KEY=""
   SAVED_DASHSCOPE_API_KEY=""
+  SAVED_BRAVE_API_KEY=""
+  SAVED_TAVILY_API_KEY=""
   LAST_PROJECT_DIR=""
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck source=/dev/null
@@ -181,9 +185,13 @@ load_defaults() {
   fi
   # Ensure CLAUDE_HUD has a default if not in config
   DEFAULT_CLAUDE_HUD="${DEFAULT_CLAUDE_HUD:-1}"
+  DEFAULT_BRAVE_SEARCH="${DEFAULT_BRAVE_SEARCH:-2}"
+  DEFAULT_TAVILY_SEARCH="${DEFAULT_TAVILY_SEARCH:-2}"
   # Pre-populate env vars from saved keys if not already set
   if [[ -z "${MINIMAX_API_KEY:-}" && -n "$SAVED_MINIMAX_API_KEY" ]]; then export MINIMAX_API_KEY="$SAVED_MINIMAX_API_KEY"; fi
   if [[ -z "${DASHSCOPE_API_KEY:-}" && -n "$SAVED_DASHSCOPE_API_KEY" ]]; then export DASHSCOPE_API_KEY="$SAVED_DASHSCOPE_API_KEY"; fi
+  if [[ -z "${BRAVE_API_KEY:-}" && -n "$SAVED_BRAVE_API_KEY" ]]; then export BRAVE_API_KEY="$SAVED_BRAVE_API_KEY"; fi
+  if [[ -z "${TAVILY_API_KEY:-}" && -n "$SAVED_TAVILY_API_KEY" ]]; then export TAVILY_API_KEY="$SAVED_TAVILY_API_KEY"; fi
 }
 
 # Trap to restore settings on interrupt
@@ -204,8 +212,12 @@ DEFAULT_MC_2=$DEFAULT_MC_2
 DEFAULT_MC_3=$DEFAULT_MC_3
 DEFAULT_AGENT_TEAMS=$AGENT_TEAMS_CHOICE
 DEFAULT_CLAUDE_HUD=$CLAUDE_HUD_CHOICE
+DEFAULT_BRAVE_SEARCH=$BRAVE_SEARCH_CHOICE
+DEFAULT_TAVILY_SEARCH=$TAVILY_SEARCH_CHOICE
 SAVED_MINIMAX_API_KEY="${MINIMAX_API_KEY:-}"
 SAVED_DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}"
+SAVED_BRAVE_API_KEY="${BRAVE_API_KEY:-}"
+SAVED_TAVILY_API_KEY="${TAVILY_API_KEY:-}"
 LAST_PROJECT_DIR="$PROJECT_DIR"
 EOF
   chmod 600 "$CONFIG_FILE"
@@ -494,11 +506,217 @@ EOF
   echo -e "${GREEN}✓ Claude-hud configured with all features!${RESET}"
 }
 
+# ─── Configure Brave Search MCP ─────────────────────────────────────────────────
+configure_brave_search() {
+  local api_key="$1"
+
+  echo -e "${CYAN}Configuring Brave Search MCP...${RESET}"
+
+  # Use python to update settings.json with Brave MCP
+  python3 - "$CLAUDE_SETTINGS" "$api_key" <<'PYEOF'
+import json
+import sys
+
+settings_path = sys.argv[1]
+brave_key = sys.argv[2]
+
+settings = {}
+try:
+    with open(settings_path) as f:
+        settings = json.load(f)
+except:
+    pass
+
+# Add extraKnownMarketplaces for brave-search
+if 'extraKnownMarketplaces' not in settings:
+    settings['extraKnownMarketplaces'] = {}
+
+# Ensure enabledPlugins exists
+if 'enabledPlugins' not in settings:
+    settings['enabledPlugins'] = {}
+
+# Add brave-search marketplace (already handled by claude-mcp-servers usually)
+# Just ensure the permission is set in settings.local.json
+settings['skipDangerousModePermissionPrompt'] = True
+
+# Write to settings.json (but actual MCP server config goes to .claude.json per project)
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+
+# Add Brave Search MCP to project-level config
+import os
+claude_json_path = os.path.join(os.path.expanduser('~'), '.claude.json')
+
+# Load existing project configs
+try:
+    with open(claude_json_path) as f:
+        claude_data = json.load(f)
+except:
+    claude_data = {}
+
+# Get current working directory project
+import subprocess
+try:
+    cwd = subprocess.check_output(['pwd']).decode().strip()
+except:
+    cwd = os.getcwd()
+
+# Find project in claude_data
+if 'projects' not in claude_data:
+    claude_data['projects'] = {}
+
+if cwd not in claude_data['projects']:
+    claude_data['projects'][cwd] = {}
+
+project_config = claude_data['projects'][cwd]
+
+# Add MCP server config
+if 'mcpServers' not in project_config:
+    project_config['mcpServers'] = {}
+
+project_config['mcpServers']['brave-search'] = {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+    "env": {
+        "BRAVE_API_KEY": brave_key
+    }
+}
+
+claude_data['projects'][cwd] = project_config
+
+with open(claude_json_path, 'w') as f:
+    json.dump(claude_data, f, indent=2)
+
+print("Brave Search MCP configured successfully")
+PYEOF
+
+  echo -e "${GREEN}✓ Brave Search MCP configured!${RESET}"
+}
+
+# ─── Configure Tavily MCP ────────────────────────────────────────────────────────
+configure_tavily_search() {
+  local api_key="$1"
+
+  echo -e "${CYAN}Configuring Tavily MCP...${RESET}"
+
+  # Use python to update .claude.json with Tavily MCP
+  python3 - "$api_key" <<'PYEOF'
+import json
+import sys
+import os
+
+api_key = sys.argv[1]
+
+claude_json_path = os.path.join(os.path.expanduser('~'), '.claude.json')
+
+# Load existing project configs
+try:
+    with open(claude_json_path) as f:
+        claude_data = json.load(f)
+except:
+    claude_data = {}
+
+# Get current working directory project
+import subprocess
+try:
+    cwd = subprocess.check_output(['pwd']).decode().strip()
+except:
+    cwd = os.getcwd()
+
+# Find project in claude_data
+if 'projects' not in claude_data:
+    claude_data['projects'] = {}
+
+if cwd not in claude_data['projects']:
+    claude_data['projects'][cwd] = {}
+
+project_config = claude_data['projects'][cwd]
+
+# Add MCP server config - using Tavily remote MCP
+if 'mcpServers' not in project_config:
+    project_config['mcpServers'] = {}
+
+project_config['mcpServers']['tavily'] = {
+    "type": "http",
+    "url": f"https://mcp.tavily.com/mcp/?tavilyApiKey={api_key}"
+}
+
+claude_data['projects'][cwd] = project_config
+
+with open(claude_json_path, 'w') as f:
+    json.dump(claude_data, f, indent=2)
+
+print("Tavily MCP configured successfully")
+PYEOF
+
+  echo -e "${GREEN}✓ Tavily MCP configured!${RESET}"
+}
+
+# ─── Update settings.local.json with MCP permissions ─────────────────────────────
+update_mcp_permissions() {
+  echo -e "${CYAN}Updating MCP permissions...${RESET}"
+
+  local settings_local="${HOME}/.claude/settings.local.json"
+
+  # Ensure directory exists
+  mkdir -p "$(dirname "$settings_local")"
+
+  # Create or update settings.local.json
+  python3 - "$settings_local" <<'PYEOF'
+import json
+import sys
+import os
+
+settings_local_path = sys.argv[1]
+
+# Load existing or create new
+try:
+    with open(settings_local_path) as f:
+        settings = json.load(f)
+except:
+    settings = {"permissions": {"allow": []}}
+
+if "permissions" not in settings:
+    settings["permissions"] = {"allow": []}
+
+if "allow" not in settings["permissions"]:
+    settings["permissions"]["allow"] = []
+
+# Add MCP permissions if not already present
+permissions_to_add = [
+    "mcp__context7__resolve-library-id",
+    "mcp__context7__query-docs",
+    "mcp__brave-search__brave_web_search",
+    "mcp__brave-search__brave_image_search",
+    "mcp__brave-search__brave_news_search",
+    "mcp__tavily__tavily_search",
+    "mcp__tavily__tavily_extract",
+    "mcp__tavily__tavily_crawl",
+    "mcp__tavily__tavily_map",
+    "mcp__tavily__tavily_research"
+]
+
+for perm in permissions_to_add:
+    if perm not in settings["permissions"]["allow"]:
+        settings["permissions"]["allow"].append(perm)
+
+with open(settings_local_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+
+print("MCP permissions updated")
+PYEOF
+
+  echo -e "${GREEN}✓ MCP permissions updated!${RESET}"
+}
+
 # ─── Quick launch with saved config ─────────────────────────────────────────
 quick_launch() {
   PLAN_CHOICE="$DEFAULT_PLAN"
   AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"
   CLAUDE_HUD_CHOICE="${DEFAULT_CLAUDE_HUD:-1}"
+  BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"
+  TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}"
 
   # Save current directory for resume
   LAST_PROJECT_DIR="$(pwd)"
@@ -725,6 +943,8 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
 
   # Apply saved provider settings (same as quick_launch but for resume)
   AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"
+  BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"
+  TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}"
 
   case "$DEFAULT_PLAN" in
     1)  # Anthropic
@@ -837,6 +1057,8 @@ BASE_URL=""
 API_KEY_VAR=""
 EXTRA_ARGS=()
 AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"  # Default to disabled
+BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"  # Default to disabled
+TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}" # Default to disabled
 
 case "$PLAN_CHOICE" in
 
@@ -953,6 +1175,55 @@ CLAUDE_HUD_CHOICE=$(pick "Claude-HUD" 2 "$DEFAULT_CLAUDE_HUD")
 if [[ "$CLAUDE_HUD_CHOICE" == "1" ]]; then
   check_claude_hud
 fi
+
+# ─── Step 2.7 — Brave Search MCP Option ────────────────────────────────────────
+echo ""
+print_menu "Install Brave Search MCP?" \
+  "[Yes] Enable  — Enable Brave Search for web search (requires API key)" \
+  "[No]  Disable — Skip Brave Search"
+BRAVE_SEARCH_CHOICE=$(pick "Brave Search" 2 "$DEFAULT_BRAVE_SEARCH")
+
+# Ask for API key if enabling Brave Search
+if [[ "$BRAVE_SEARCH_CHOICE" == "1" ]]; then
+  if [[ -z "${BRAVE_API_KEY:-}" ]]; then
+    read -rsp "  Enter Brave Search API key: " BRAVE_API_KEY
+    echo ""
+    if [[ -z "$BRAVE_API_KEY" ]]; then
+      echo -e "${YELLOW}No API key provided, skipping Brave Search.${RESET}"
+      BRAVE_SEARCH_CHOICE="2"
+    fi
+  fi
+
+  if [[ "$BRAVE_SEARCH_CHOICE" == "1" ]]; then
+    configure_brave_search "$BRAVE_API_KEY"
+  fi
+fi
+
+# ─── Step 2.8 — Tavily Search MCP Option ────────────────────────────────────────
+echo ""
+print_menu "Install Tavily Search MCP?" \
+  "[Yes] Enable  — Enable Tavily Search for web search (requires API key)" \
+  "[No]  Disable — Skip Tavily Search"
+TAVILY_SEARCH_CHOICE=$(pick "Tavily Search" 2 "$DEFAULT_TAVILY_SEARCH")
+
+# Ask for API key if enabling Tavily Search
+if [[ "$TAVILY_SEARCH_CHOICE" == "1" ]]; then
+  if [[ -z "${TAVILY_API_KEY:-}" ]]; then
+    read -rsp "  Enter Tavily Search API key (starts with tvly-): " TAVILY_API_KEY
+    echo ""
+    if [[ -z "$TAVILY_API_KEY" ]]; then
+      echo -e "${YELLOW}No API key provided, skipping Tavily Search.${RESET}"
+      TAVILY_SEARCH_CHOICE="2"
+    fi
+  fi
+
+  if [[ "$TAVILY_SEARCH_CHOICE" == "1" ]]; then
+    configure_tavily_search "$TAVILY_API_KEY"
+  fi
+fi
+
+# Always update MCP permissions
+update_mcp_permissions
 
 # ─── Save choices for next run ────────────────────────────────────────────────
 save_defaults
