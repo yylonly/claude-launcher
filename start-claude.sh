@@ -1181,7 +1181,7 @@ echo ""
 print_menu "Install Brave Search MCP?" \
   "[Yes] Enable  — Enable Brave Search for web search (requires API key)" \
   "[No]  Disable — Skip Brave Search"
-BRAVE_SEARCH_CHOICE=$(pick "Brave Search" 2 "$DEFAULT_BRAVE_SEARCH")
+BRAVE_SEARCH_CHOICE=$(pick "Brave Search" 2 "2")
 
 # Ask for API key if enabling Brave Search
 if [[ "$BRAVE_SEARCH_CHOICE" == "1" ]]; then
@@ -1204,7 +1204,7 @@ echo ""
 print_menu "Install Tavily Search MCP?" \
   "[Yes] Enable  — Enable Tavily Search for web search (requires API key)" \
   "[No]  Disable — Skip Tavily Search"
-TAVILY_SEARCH_CHOICE=$(pick "Tavily Search" 2 "$DEFAULT_TAVILY_SEARCH")
+TAVILY_SEARCH_CHOICE=$(pick "Tavily Search" 2 "2")
 
 # Ask for API key if enabling Tavily Search
 if [[ "$TAVILY_SEARCH_CHOICE" == "1" ]]; then
