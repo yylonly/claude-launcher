@@ -12,6 +12,66 @@ An interactive launcher for [Claude Code](https://claude.ai/code) that supports 
 - **Simple Install** — One-command install to your PATH
 - **Auto-Install** — Automatically installs Claude Code if not present
 
+## Project Structure
+
+```
+claude-launcher/
+├── start-claude.sh      # Main launcher script (core)
+├── install.sh          # Local installation script
+├── install-remote.sh   # One-liner remote installation
+├── uninstall.sh        # Uninstallation script
+├── delete-plugin.sh    # Plugin deletion utility
+├── README.md           # This file
+└── CLAUDE.md           # Claude Code configuration guide
+```
+
+## File Dependencies
+
+### start-claude.sh (Core)
+- **External Dependencies:**
+  - Claude Code (`claude` command)
+  - Python 3 (for JSON merging)
+  - curl (for API calls and updates)
+  - claude-hud plugin (optional, auto-installed)
+- **Configuration Files:**
+  - `~/.claude-launcher.conf` — Provider, model, API keys, last project directory
+  - `~/.claude/settings.json` — Claude Code configuration
+  - `~/.claude.json` — Claude Code onboarding status
+  - `~/.claude/plugins/claude-hud/config.json` — HUD plugin config
+
+### install.sh
+- **Dependencies:**
+  - `start-claude.sh` (source file to install)
+  - bash shell
+- **Creates:**
+  - `~/.local/bin/claude-launcher` (or `~/bin`, `/usr/local/bin`)
+  - `~/.local/bin/cli` (symlink)
+  - `~/.local/bin/start-claude` (symlink)
+
+### install-remote.sh
+- **Dependencies:**
+  - GitHub Raw URL: `https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh`
+  - curl (for downloading)
+- **Creates:**
+  - `~/.local/bin/claude-launcher`
+  - `~/.local/bin/cli` (symlink)
+  - `~/.local/bin/start-claude` (symlink)
+
+### uninstall.sh
+- **Dependencies:**
+  - `~/.claude-launcher.conf` (config file)
+  - `~/.claude/settings.json.launcher-bak` (backup file)
+- **Removes:**
+  - `~/.local/bin/claude-launcher`
+  - `~/.local/bin/cli`
+  - `~/.local/bin/start-claude`
+  - Optional: config files
+
+### delete-plugin.sh
+- **Dependencies:**
+  - `~/.claude/plugins/` (plugin directory)
+  - `~/.claude/plugins/installed_plugins.json` (plugin registry)
+
 ## Supported Providers
 
 | Provider | Models |

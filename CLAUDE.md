@@ -4,7 +4,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a single-file bash project: `start-claude.sh` — an interactive launcher for Claude Code that supports multiple API providers.
+This is a multi-file bash project for Claude Code launcher that supports multiple API providers.
+
+## Project Structure
+
+```
+claude-launcher/
+├── start-claude.sh       # Main launcher script (core)
+├── install.sh           # Local installation script
+├── install-remote.sh    # One-liner remote installation
+├── uninstall.sh         # Uninstallation script
+├── delete-plugin.sh     # Plugin deletion utility
+├── README.md           # Project documentation
+└── CLAUDE.md           # This file
+```
+
+## File Dependencies
+
+### start-claude.sh (Core)
+- **External Dependencies:**
+  - Claude Code (`claude` command)
+  - Python 3 (for JSON merging)
+  - curl (for API calls and updates)
+  - claude-hud plugin (optional)
+- **Configuration Files:**
+  - `~/.claude-launcher.conf` — Provider, model, API keys
+  - `~/.claude/settings.json` — Claude Code settings
+  - `~/.claude.json` — Claude onboarding status
+  - `~/.claude/plugins/claude-hud/config.json` — HUD config
+
+### install.sh
+- **Source:** `start-claude.sh`
+- **Target:** `~/.local/bin/` (or `~/bin`, `/usr/local/bin`)
+
+### install-remote.sh
+- **Source:** GitHub Raw URL
+- **Target:** `~/.local/bin/`
+
+### uninstall.sh
+- **Config:** `~/.claude-launcher.conf`
+- **Backup:** `~/.claude/settings.json.launcher-bak`
+
+### delete-plugin.sh
+- **Target:** `~/.claude/plugins/`
 
 ## Running the Script
 
@@ -33,7 +75,9 @@ The script is interactive and will:
 
 - `start-claude.sh`: Main launcher script (interactive Claude Code launcher)
 - `install.sh`: Installation script (installs launcher to PATH)
+- `install-remote.sh`: Remote installation script
 - `uninstall.sh`: Uninstallation script (removes launcher and optionally configs)
+- `delete-plugin.sh`: Plugin deletion utility
 
 ## Configuration Files Created
 
@@ -41,6 +85,7 @@ The script creates/modifies these files in `$HOME`:
 - `~/.claude-launcher.conf`: Saves last provider/model choices, API keys, and last project directory
 - `~/.claude/settings.json`: Claude Code settings (backed up to `~/.claude/settings.json.launcher-bak`)
 - `~/.claude.json`: Onboarding status
+- `~/.claude/plugins/claude-hud/config.json`: HUD plugin configuration
 
 ## Testing
 
@@ -55,5 +100,6 @@ The script follows a simple structure:
 1. **Configuration** (lines 1-30): Shebang, error handling, ANSI colors, path variables
 2. **Helper Functions** (lines ~30-360): Settings writing, config loading, UI helpers
 3. **Claude Code Check** (lines ~360-420): Installation check, auto-install, update checking
-4. **Argument Handling** (lines ~500-540): Parse -r, -c flags
-5. **Main Flow** (lines ~540-830): Provider selection → Model selection → Launch
+4. **Claude-hud Plugin** (lines ~380-500): Plugin check, install and configure
+5. **Argument Handling** (lines ~500-540): Parse -r, -c flags
+6. **Main Flow** (lines ~540-830): Provider selection → Model selection → Launch
