@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Version
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 # Colors
 BOLD='\033[1m'
@@ -56,6 +56,14 @@ if [[ -n "$INSTALL_DIR" && -d "$INSTALL_DIR" ]]; then
     fi
     if [[ -L "${INSTALL_DIR}/cli" ]]; then
         FOUND_FILES+=("${INSTALL_DIR}/cli")
+    fi
+    if [[ -f "${INSTALL_DIR}/delete-plugin.sh" || -L "${INSTALL_DIR}/delete-plugin" ]]; then
+        FOUND_FILES+=("${INSTALL_DIR}/delete-plugin.sh")
+        [[ -L "${INSTALL_DIR}/delete-plugin" ]] && FOUND_FILES+=("${INSTALL_DIR}/delete-plugin")
+    fi
+    if [[ -f "${INSTALL_DIR}/delete-mcp.sh" || -L "${INSTALL_DIR}/delete-mcp" ]]; then
+        FOUND_FILES+=("${INSTALL_DIR}/delete-mcp.sh")
+        [[ -L "${INSTALL_DIR}/delete-mcp" ]] && FOUND_FILES+=("${INSTALL_DIR}/delete-mcp")
     fi
 fi
 
