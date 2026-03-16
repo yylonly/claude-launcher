@@ -15,8 +15,10 @@ RESET='\033[0m'
 
 SCRIPT_NAME="start-claude.sh"
 INSTALL_NAME="claude-launcher"
+DELETE_MCP_SCRIPT="delete-mcp.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_FILE="${SCRIPT_DIR}/${SCRIPT_NAME}"
+DELETE_MCP_SOURCE="${SCRIPT_DIR}/${DELETE_MCP_SCRIPT}"
 
 # Find the best install directory
 find_install_dir() {
@@ -111,6 +113,7 @@ if command -v "$INSTALL_NAME" &>/dev/null; then
     echo "Or with the full name:"
     echo -e "  ${BOLD}start-claude${RESET}"
     echo -e "  ${BOLD}claude-launcher${RESET}"
+    echo -e "  ${BOLD}delete-mcp${RESET}         — Delete local MCP servers"
 else
     echo ""
     echo -e "${YELLOW}Warning: ${INSTALL_NAME} not found in PATH${RESET}"
@@ -128,6 +131,30 @@ if [[ ! -L "${INSTALL_DIR}/start-claude" && ! -f "${INSTALL_DIR}/start-claude" ]
         ln -sf "$TARGET_FILE" "${INSTALL_DIR}/start-claude"
     fi
     echo -e "${GREEN}✓ Done${RESET}"
+fi
+
+# Install delete-mcp.sh if exists
+if [[ -f "$DELETE_MCP_SOURCE" ]]; then
+    echo -n "Installing delete-mcp.sh... "
+    if [[ "$USE_SUDO" == true ]]; then
+        sudo cp "$DELETE_MCP_SOURCE" "${INSTALL_DIR}/delete-mcp.sh"
+        sudo chmod +x "${INSTALL_DIR}/delete-mcp.sh"
+    else
+        cp "$DELETE_MCP_SOURCE" "${INSTALL_DIR}/delete-mcp.sh"
+        chmod +x "${INSTALL_DIR}/delete-mcp.sh"
+    fi
+    echo -e "${GREEN}✓ Done${RESET}"
+
+    # Create delete-mcp symlink
+    if [[ ! -L "${INSTALL_DIR}/delete-mcp" ]]; then
+        echo -n "Creating delete-mcp symlink... "
+        if [[ "$USE_SUDO" == true ]]; then
+            sudo ln -sf "${INSTALL_DIR}/delete-mcp.sh" "${INSTALL_DIR}/delete-mcp"
+        else
+            ln -sf "${INSTALL_DIR}/delete-mcp.sh" "${INSTALL_DIR}/delete-mcp"
+        fi
+        echo -e "${GREEN}✓ Done${RESET}"
+    fi
 fi
 
 echo ""
