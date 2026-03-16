@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.1.0"
+VERSION="1.2.0"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
