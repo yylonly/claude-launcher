@@ -16,9 +16,11 @@ RESET='\033[0m'
 SCRIPT_NAME="start-claude.sh"
 INSTALL_NAME="claude-launcher"
 DELETE_MCP_SCRIPT="delete-mcp.sh"
+DELETE_PLUGIN_SCRIPT="delete-plugin.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_FILE="${SCRIPT_DIR}/${SCRIPT_NAME}"
 DELETE_MCP_SOURCE="${SCRIPT_DIR}/${DELETE_MCP_SCRIPT}"
+DELETE_PLUGIN_SOURCE="${SCRIPT_DIR}/${DELETE_PLUGIN_SCRIPT}"
 
 # Find the best install directory
 find_install_dir() {
@@ -114,6 +116,7 @@ if command -v "$INSTALL_NAME" &>/dev/null; then
     echo -e "  ${BOLD}start-claude${RESET}"
     echo -e "  ${BOLD}claude-launcher${RESET}"
     echo -e "  ${BOLD}delete-mcp${RESET}         — Delete local MCP servers"
+    echo -e "  ${BOLD}delete-plugin${RESET}      — Delete Claude plugins"
 else
     echo ""
     echo -e "${YELLOW}Warning: ${INSTALL_NAME} not found in PATH${RESET}"
@@ -152,6 +155,30 @@ if [[ -f "$DELETE_MCP_SOURCE" ]]; then
             sudo ln -sf "${INSTALL_DIR}/delete-mcp.sh" "${INSTALL_DIR}/delete-mcp"
         else
             ln -sf "${INSTALL_DIR}/delete-mcp.sh" "${INSTALL_DIR}/delete-mcp"
+        fi
+        echo -e "${GREEN}✓ Done${RESET}"
+    fi
+fi
+
+# Install delete-plugin.sh if exists
+if [[ -f "$DELETE_PLUGIN_SOURCE" ]]; then
+    echo -n "Installing delete-plugin.sh... "
+    if [[ "$USE_SUDO" == true ]]; then
+        sudo cp "$DELETE_PLUGIN_SOURCE" "${INSTALL_DIR}/delete-plugin.sh"
+        sudo chmod +x "${INSTALL_DIR}/delete-plugin.sh"
+    else
+        cp "$DELETE_PLUGIN_SOURCE" "${INSTALL_DIR}/delete-plugin.sh"
+        chmod +x "${INSTALL_DIR}/delete-plugin.sh"
+    fi
+    echo -e "${GREEN}✓ Done${RESET}"
+
+    # Create delete-plugin symlink
+    if [[ ! -L "${INSTALL_DIR}/delete-plugin" ]]; then
+        echo -n "Creating delete-plugin symlink... "
+        if [[ "$USE_SUDO" == true ]]; then
+            sudo ln -sf "${INSTALL_DIR}/delete-plugin.sh" "${INSTALL_DIR}/delete-plugin"
+        else
+            ln -sf "${INSTALL_DIR}/delete-plugin.sh" "${INSTALL_DIR}/delete-plugin"
         fi
         echo -e "${GREEN}✓ Done${RESET}"
     fi
