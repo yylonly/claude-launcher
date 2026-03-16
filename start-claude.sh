@@ -624,11 +624,6 @@ quick_launch() {
   fi
   echo ""
 
-  # Install claude-hud if enabled in config
-  if [[ "$CLAUDE_HUD_CHOICE" == "1" ]]; then
-    check_claude_hud
-  fi
-
   # Save config including project directory for resume
   save_defaults
 
