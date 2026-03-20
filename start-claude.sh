@@ -10,7 +10,7 @@ if [[ ! -t 0 ]]; then
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.2"
+VERSION="1.2.3"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -897,10 +897,322 @@ quick_launch() {
   exec claude --model "opus[1m]" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
 }
 
+# ─── Uninstall Subcommand ─────────────────────────────────────────────────────
+run_uninstall() {
+  INSTALL_NAME="claude-launcher"
+  ALIAS_NAME="start-claude"
+  CONFIG_FILE="${HOME}/.claude-launcher.conf"
+  CLAUDE_SETTINGS_BAK="${HOME}/.claude/settings.json.launcher-bak"
+
+  echo -e "${BOLD}Claude Launcher Uninstaller${RESET}"
+  echo "============================"
+  echo ""
+
+  find_install_dir() {
+    if command -v "$INSTALL_NAME" &>/dev/null; then
+        dirname "$(command -v "$INSTALL_NAME")"
+        return
+    fi
+    for dir in "${HOME}/.local/bin" "${HOME}/bin" "/usr/local/bin"; do
+        if [[ -f "${dir}/${INSTALL_NAME}" ]]; then
+            echo "$dir"
+            return
+        fi
+    done
+    echo ""
+  }
+
+  INSTALL_DIR="$(find_install_dir)"
+  FOUND_FILES=()
+
+  if [[ -n "$INSTALL_DIR" && -d "$INSTALL_DIR" ]]; then
+    [[ -f "${INSTALL_DIR}/${INSTALL_NAME}" ]] && FOUND_FILES+=("${INSTALL_DIR}/${INSTALL_NAME}")
+    [[ -L "${INSTALL_DIR}/${ALIAS_NAME}" ]] && FOUND_FILES+=("${INSTALL_DIR}/${ALIAS_NAME}")
+    [[ -L "${INSTALL_DIR}/cli" ]] && FOUND_FILES+=("${INSTALL_DIR}/cli")
+    [[ -f "${INSTALL_DIR}/delete-plugin.sh" || -L "${INSTALL_DIR}/delete-plugin" ]] && FOUND_FILES+=("${INSTALL_DIR}/delete-plugin.sh")
+    [[ -f "${INSTALL_DIR}/delete-mcp.sh" || -L "${INSTALL_DIR}/delete-mcp" ]] && FOUND_FILES+=("${INSTALL_DIR}/delete-mcp.sh")
+  fi
+
+  FOUND_CONFIGS=()
+  [[ -f "$CONFIG_FILE" ]] && FOUND_CONFIGS+=("$CONFIG_FILE")
+  [[ -f "$CLAUDE_SETTINGS_BAK" ]] && FOUND_CONFIGS+=("$CLAUDE_SETTINGS_BAK")
+
+  if [[ ${#FOUND_FILES[@]} -eq 0 && ${#FOUND_CONFIGS[@]} -eq 0 ]]; then
+    echo -e "${YELLOW}No claude-launcher installation found.${RESET}"
+    return 0
+  fi
+
+  echo "The following files will be removed:"
+  echo ""
+
+  if [[ ${#FOUND_FILES[@]} -gt 0 ]]; then
+    echo -e "${CYAN}Installed binaries:${RESET}"
+    for f in "${FOUND_FILES[@]}"; do
+      echo "  - $f"
+    done
+    echo ""
+  fi
+
+  if [[ ${#FOUND_CONFIGS[@]} -gt 0 ]]; then
+    echo -e "${CYAN}Configuration files:${RESET}"
+    for f in "${FOUND_CONFIGS[@]}"; do
+      echo "  - $f"
+    done
+    echo ""
+  fi
+
+  read -p "Do you want to proceed? [y/N]: " confirm
+  echo ""
+
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "Uninstall cancelled."
+    return 0
+  fi
+
+  REMOVED_COUNT=0
+  for file in "${FOUND_FILES[@]}"; do
+    if [[ -f "$file" || -L "$file" ]]; then
+      echo -n "Removing ${file}... "
+      if [[ -w "$(dirname "$file")" ]]; then
+        rm -f "$file"
+      else
+        sudo rm -f "$file"
+      fi
+      echo -e "${GREEN}Done${RESET}"
+      ((REMOVED_COUNT++)) || true
+    fi
+  done
+
+  if [[ ${#FOUND_CONFIGS[@]} -gt 0 ]]; then
+    echo ""
+    echo -e "${YELLOW}Configuration files found:${RESET}"
+    for f in "${FOUND_CONFIGS[@]}"; do
+      echo "  - $f"
+    done
+    echo ""
+    read -p "Remove configuration files as well? [y/N]: " remove_config
+    echo ""
+
+    if [[ "$remove_config" =~ ^[Yy]$ ]]; then
+      for f in "${FOUND_CONFIGS[@]}"; do
+        if [[ -f "$f" ]]; then
+          echo -n "Removing ${f}... "
+          rm -f "$f"
+          echo -e "${GREEN}Done${RESET}"
+        fi
+      done
+
+      CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
+      if [[ -f "$CLAUDE_SETTINGS" && -f "${CLAUDE_SETTINGS}.orig" ]]; then
+        echo ""
+        read -p "Restore original Claude Code settings? [y/N]: " restore_settings
+        if [[ "$restore_settings" =~ ^[Yy]$ ]]; then
+          mv "${CLAUDE_SETTINGS}.orig" "$CLAUDE_SETTINGS"
+          echo -e "${GREEN}Original settings restored.${RESET}"
+        fi
+      fi
+    fi
+  fi
+
+  echo ""
+  echo -e "${GREEN}Uninstall complete.${RESET}"
+}
+
+# ─── MCP Subcommand ───────────────────────────────────────────────────────────
+run_mcp() {
+  CLAUDE_JSON="${HOME}/.claude.json"
+
+  mcp_usage() {
+    echo "Usage: cli mcp [options]"
+    echo ""
+    echo "Options:"
+    echo "  -l, --list     List all local MCP servers"
+    echo "  -d, --delete   Delete a specific MCP server (interactive)"
+    echo "  -a, --all      Delete all local MCP servers"
+    echo "  -h, --help     Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  cli mcp -l              # List all MCP servers"
+    echo "  cli mcp -d brave-search # Delete brave-search MCP"
+    echo "  cli mcp -a              # Delete all MCP servers"
+  }
+
+  list_mcps() {
+    echo -e "${CYAN}Local MCP Servers:${RESET}"
+    echo ""
+
+    if [[ ! -f "$CLAUDE_JSON" ]]; then
+      echo -e "${YELLOW}No .claude.json found.${RESET}"
+      return
+    fi
+
+    python3 - "$CLAUDE_JSON" <<'PYEOF'
+import json
+import sys
+import re
+
+path = sys.argv[1]
+with open(path) as f:
+    data = json.load(f)
+
+projects = data.get("projects", {})
+mcp_count = 0
+
+for project_path, project_data in projects.items():
+    mcp_servers = project_data.get("mcpServers", {})
+    if mcp_servers:
+        print(f"Project: {project_path}")
+        for name, config in mcp_servers.items():
+            if config.get("type") == "stdio":
+                cmd = " ".join(config.get("args", []))
+                print(f"  - {name}: stdio {cmd}")
+            elif config.get("type") == "http":
+                url = config.get("url", "")
+                masked = re.sub(r'(api[_-]?key=)[^&]+', r'\1***', url)
+                print(f"  - {name}: http {masked}")
+            mcp_count += 1
+        print("")
+
+if mcp_count == 0:
+    print("No MCP servers found.")
+
+PYEOF
+  }
+
+  delete_mcp() {
+    local mcp_name="$1"
+
+    if [[ ! -f "$CLAUDE_JSON" ]]; then
+      echo -e "${RED}No .claude.json found.${RESET}"
+      return 1
+    fi
+
+    python3 - "$CLAUDE_JSON" "$mcp_name" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+mcp_name = sys.argv[2]
+
+with open(path) as f:
+    data = json.load(f)
+
+deleted = False
+projects = data.get("projects", {})
+
+for project_path, project_data in projects.items():
+    mcp_servers = project_data.get("mcpServers", {})
+    if mcp_name in mcp_servers:
+        del mcp_servers[mcp_name]
+        print(f"Deleted '{mcp_name}' from {project_path}")
+        deleted = True
+
+if deleted:
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
+    print("Done.")
+else:
+    print(f"MCP server '{mcp_name}' not found.")
+    sys.exit(1)
+
+PYEOF
+  }
+
+  delete_all() {
+    if [[ ! -f "$CLAUDE_JSON" ]]; then
+      echo -e "${YELLOW}No .claude.json found.${RESET}"
+      return
+    fi
+
+    echo -e "${YELLOW}This will delete all local MCP servers.${RESET}"
+    read -rp "Continue? [y/N]: " confirm
+
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      python3 - "$CLAUDE_JSON" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+
+with open(path) as f:
+    data = json.load(f)
+
+count = 0
+projects = data.get("projects", {})
+
+for project_path, project_data in projects.items():
+    mcp_servers = project_data.get("mcpServers", {})
+    if mcp_servers:
+        count += len(mcp_servers)
+        project_data["mcpServers"] = {}
+
+if count > 0:
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
+    print(f"Deleted {count} MCP server(s).")
+else:
+    print("No MCP servers to delete.")
+
+PYEOF
+    else
+      echo "Cancelled."
+    fi
+  }
+
+  if [[ $# -eq 0 ]]; then
+    mcp_usage
+    return 0
+  fi
+
+  case "$1" in
+    -l|--list)
+      list_mcps
+      ;;
+    -d|--delete)
+      if [[ -z "${2:-}" ]]; then
+        echo -e "${RED}Error: MCP server name required.${RESET}"
+        echo "Use: cli mcp -d <name> or cli mcp --delete <name>"
+        return 1
+      fi
+      delete_mcp "$2"
+      ;;
+    -a|--all)
+      delete_all
+      ;;
+    -h|--help)
+      mcp_usage
+      ;;
+    *)
+      echo -e "${RED}Unknown option: $1${RESET}"
+      mcp_usage
+      return 1
+      ;;
+  esac
+}
 # ─── Main: Handle arguments ─────────────────────────────────────────────────
 RESUME_MODE=0
 RESUME_SESSION=""
 CONF_MODE=0
+
+# Handle subcommands first
+if [[ "${1:-}" == "uninstall" ]]; then
+  shift
+  run_uninstall "$@"
+  exit $?
+elif [[ "${1:-}" == "mcp" ]]; then
+  shift
+  run_mcp "$@"
+  exit $?
+elif [[ "${1:-}" == "resume" ]]; then
+  RESUME_MODE=1
+  RESUME_SESSION="${2:-}"
+elif [[ "${1:-}" == "update" ]]; then
+  check_update
+  exit $?
+elif [[ "${1:-}" == "config" ]]; then
+  CONF_MODE=1
+fi
+
 if [[ "${1:-}" == "-u" ]] || [[ "${1:-}" == "--update" ]]; then
   check_update
   exit $?
@@ -922,12 +1234,19 @@ elif [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
   echo "  -u, --update       Check for updates and install if available"
   echo "  -h, --help         Show this help message"
   echo ""
+  echo "Subcommands:"
+  echo "  resume [id]         Resume a session (same as -r)"
+  echo "  update              Check for updates (same as -u)"
+  echo "  config              Interactive configuration (same as -c)"
+  echo ""
   echo "Examples:"
   echo "  cli                 # Launch with last used provider/model"
   echo "  cli -r              # Resume last session"
-  echo "  cli -r abc123       # Resume session abc123"
+  echo "  cli resume          # Resume last session (alternative)"
   echo "  cli -c              # Change provider/model/API key"
+  echo "  cli config          # Change provider/model/API key (alternative)"
   echo "  cli -u              # Check for updates"
+  echo "  cli update          # Check for updates (alternative)"
   echo ""
   exit 0
 elif [[ "${1:-}" == "-r" ]] || [[ "${1:-}" == "--resume" ]]; then
@@ -939,7 +1258,7 @@ elif [[ "${1:-}" == "--resume" ]] && [[ -n "${2:-}" ]]; then
 elif [[ "${1:-}" == "-c" ]]; then
   # Run interactive configuration
   CONF_MODE=1
-elif [[ -n "${1:-}" ]]; then
+elif [[ -n "${1:-}" ]] && [[ "$RESUME_MODE" -eq 0 && "$CONF_MODE" -eq 0 ]]; then
   # Unknown argument, show help
   echo "Usage: $0           # Launch with saved configuration"
   echo "       $0 -r [id]   # Resume last session (optional: session ID)"
