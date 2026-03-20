@@ -19,9 +19,6 @@ claude-launcher/
 ├── start-claude.sh      # Main launcher script (core)
 ├── install.sh          # Local installation script
 ├── install-remote.sh   # One-liner remote installation
-├── uninstall.sh        # Uninstallation script
-├── delete-plugin.sh    # Plugin deletion utility
-├── delete-mcp.sh      # MCP server deletion utility
 ├── README.md           # This file
 └── CLAUDE.md           # Claude Code configuration guide
 ```
@@ -58,20 +55,6 @@ claude-launcher/
   - `~/.local/bin/cli` (symlink)
   - `~/.local/bin/start-claude` (symlink)
 
-### uninstall.sh
-- **Dependencies:**
-  - `~/.claude-launcher.conf` (config file)
-  - `~/.claude/settings.json.launcher-bak` (backup file)
-- **Removes:**
-  - `~/.local/bin/claude-launcher`
-  - `~/.local/bin/cli`
-  - `~/.local/bin/start-claude`
-  - Optional: config files
-
-### delete-plugin.sh
-- **Dependencies:**
-  - `~/.claude/plugins/` (plugin directory)
-  - `~/.claude/plugins/installed_plugins.json` (plugin registry)
 
 ## Supported Providers
 
@@ -158,13 +141,6 @@ Your settings are saved to:
 
 Original settings are backed up to `~/.claude/settings.json.launcher-bak`
 
-## Uninstallation
-
-```bash
-./uninstall.sh
-```
-
-This removes the launcher binaries and optionally cleans up configuration files.
 
 ## Requirements
 
