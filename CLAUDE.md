@@ -98,9 +98,10 @@ bash -n start-claude.sh
 ## Code Architecture
 
 The script follows a simple structure:
-1. **Configuration** (lines 1-30): Shebang, error handling, ANSI colors, path variables
-2. **Helper Functions** (lines ~30-360): Settings writing, config loading, UI helpers
-3. **Claude Code Check** (lines ~360-420): Installation check, auto-install, update checking
-4. **Claude-hud Plugin** (lines ~380-500): Plugin check, install and configure
-5. **Argument Handling** (lines ~500-540): Parse -r, -c flags
-6. **Main Flow** (lines ~540-830): Provider selection → Model selection → Launch
+1. **Configuration** (lines 1-39): Shebang, error handling, ANSI colors, path variables
+2. **Helper Functions** (lines ~40-760): Settings writing, config loading, UI helpers, plugin/MCP configuration
+3. **Claude Code Check** (lines ~312-444): Installation check, auto-install, update checking
+4. **Claude-hud Plugin** (lines ~446-554): Plugin check, install and configure
+5. **Brave/Tavily MCP** (lines ~556-758): MCP server configuration
+6. **Quick Launch & Resume** (lines ~760-1080): Quick launch with saved config, session resume
+7. **Main Flow** (lines ~900-1328): Argument handling → Provider selection → Model selection → Launch

@@ -363,31 +363,37 @@ check_claude_code() {
     echo -e "  ${DIM}Current version:${RESET} ${current_version}"
     echo ""
 
-    # Check for updates via GitHub API
-    echo -e "  ${DIM}Checking for updates...${RESET}"
+    # Check for updates via GitHub API (press Enter to skip)
+    echo -n -e "  ${DIM}Checking for updates... (Enter to skip)${RESET}"
     local latest_version
-    latest_version=$(curl -s https://api.github.com/repos/anthropics/claude-code/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+"' | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || echo "")
-
-    if [[ -n "$latest_version" && "$latest_version" != "$current_version" ]]; then
+    # Wait for Enter key with 5 second timeout
+    if IFS= read -r -t 5 -n 1; then
+      echo "  Skipped"
+    else
       echo ""
-      echo -e "${YELLOW}Update available:${RESET} ${current_version} → ${GREEN}${latest_version}${RESET}"
-      read -rp "  Update now? [y/N]: " update_choice
-      echo ""
+      latest_version=$(curl -s https://api.github.com/repos/anthropics/claude-code/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+"' | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || echo "")
 
-      if [[ "$update_choice" =~ ^[Yy]$ ]]; then
-        echo -e "${CYAN}Updating Claude Code...${RESET}"
-        if claude update; then
+      if [[ -n "$latest_version" && "$latest_version" != "$current_version" ]]; then
+        echo ""
+        echo -e "${YELLOW}Update available:${RESET} ${current_version} → ${GREEN}${latest_version}${RESET}"
+        read -rp "  Update now? [y/N]: " update_choice
+        echo ""
+
+        if [[ "$update_choice" =~ ^[Yy]$ ]]; then
+          echo -e "${CYAN}Updating Claude Code...${RESET}"
+          if claude update; then
+            echo ""
+            echo -e "${GREEN}✓ Update successful!${RESET}"
+          else
+            echo ""
+            echo -e "${YELLOW}Update failed. You can retry later with:${RESET} claude update"
+          fi
           echo ""
-          echo -e "${GREEN}✓ Update successful!${RESET}"
-        else
-          echo ""
-          echo -e "${YELLOW}Update failed. You can retry later with:${RESET} claude update"
         fi
+      else
+        echo -e "  ${GREEN}✓ Up to date${RESET}"
         echo ""
       fi
-    else
-      echo -e "  ${GREEN}✓ Up to date${RESET}"
-      echo ""
     fi
 
     # Check plugin marketplace for updates (press Enter to skip)
@@ -888,7 +894,7 @@ quick_launch() {
   # Save config including project directory for resume
   save_defaults
 
-  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
+  exec claude --model "opus[1m]" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
 }
 
 # ─── Main: Handle arguments ─────────────────────────────────────────────────
@@ -1070,7 +1076,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
   fi
   echo ""
 
-  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${RESUME_ARGS[@]}"
+  exec claude --model "opus[1m]" --permission-mode bypassPermissions "${RESUME_ARGS[@]}"
 fi
 
 # Quick launch if no conf mode
@@ -1318,4 +1324,4 @@ if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
 fi
 echo ""
 
-exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
+exec claude --model "opus[1m]" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
