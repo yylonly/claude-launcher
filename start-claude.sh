@@ -1189,6 +1189,179 @@ PYEOF
       ;;
   esac
 }
+
+# ─── Plugin Subcommand ───────────────────────────────────────────────────────
+run_delete_plugin() {
+  PLUGIN_DIR="$HOME/.claude/plugins"
+  CONFIG_FILE="$PLUGIN_DIR/installed_plugins.json"
+  CACHE_DIR="$PLUGIN_DIR/cache"
+
+  plugin_usage() {
+    echo "Usage: cli plugin [options]"
+    echo ""
+    echo "Options:"
+    echo "  -d, --delete <name>  Delete a specific plugin"
+    echo "  -h, --help          Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  cli plugin -d claude-hud"
+    echo "  cli plugin -d code-simplifier"
+    echo ""
+    echo "Note: Use this when 'claude plugin remove' fails due to bugs."
+  }
+
+  if [[ $# -eq 0 ]]; then
+    plugin_usage
+    return 0
+  fi
+
+  case "$1" in
+    -d|--delete)
+      if [[ -z "${2:-}" ]]; then
+        echo -e "${RED}Error: Plugin name required.${RESET}"
+        echo "Use: cli plugin -d <name> or cli plugin --delete <name>"
+        return 1
+      fi
+      ;;
+    -h|--help)
+      plugin_usage
+      return 0
+      ;;
+    *)
+      echo -e "${RED}Unknown option: $1${RESET}"
+      plugin_usage
+      return 1
+      ;;
+  esac
+
+  PLUGIN_NAME="$2"
+  echo -e "${YELLOW}Forcefully removing plugin: $PLUGIN_NAME${NC}"
+
+  # Handle both formats: "claude-hud" and "claude-hud@claude-hud"
+  PLUGIN_KEY=$(echo "$PLUGIN_NAME" | sed 's/@.*$//')
+  if [[ "$PLUGIN_NAME" == *"@"* ]]; then
+    PLUGIN_FULL="$PLUGIN_NAME"
+  else
+    PLUGIN_FULL="$PLUGIN_NAME@$PLUGIN_NAME"
+  fi
+
+  # Find and remove plugin directory
+  PLUGIN_PATH=""
+  if [[ -d "$PLUGIN_DIR/$PLUGIN_NAME" ]]; then
+    PLUGIN_PATH="$PLUGIN_DIR/$PLUGIN_NAME"
+  elif [[ -d "$PLUGIN_DIR/${PLUGIN_FULL}" ]]; then
+    PLUGIN_PATH="$PLUGIN_DIR/${PLUGIN_FULL}"
+  fi
+
+  if [[ -n "$PLUGIN_PATH" ]]; then
+    echo "Removing plugin directory: $PLUGIN_PATH"
+    rm -rf "$PLUGIN_PATH"
+    echo -e "${GREEN}✓ Directory removed${NC}"
+  else
+    echo -e "${YELLOW}⚠ Plugin directory not found${NC}"
+  fi
+
+  # Remove from cache
+  if [[ -d "$CACHE_DIR" ]]; then
+    for dir in "$CACHE_DIR"/*; do
+      if [[ -d "$dir/$PLUGIN_NAME" ]] || [[ -d "$dir/${PLUGIN_FULL}" ]]; then
+        CACHE_PATH="$dir/$PLUGIN_NAME"
+        [[ -d "$dir/${PLUGIN_FULL}" ]] && CACHE_PATH="$dir/${PLUGIN_FULL}"
+        echo "Removing from cache: $CACHE_PATH"
+        rm -rf "$CACHE_PATH"
+        echo -e "${GREEN}✓ Cache removed${NC}"
+        break
+      fi
+    done
+  fi
+
+  # Update config file
+  if [[ -f "$CONFIG_FILE" ]]; then
+    if grep -q "\"$PLUGIN_FULL\"" "$CONFIG_FILE"; then
+      echo "Updating $CONFIG_FILE..."
+      python3 - "$CONFIG_FILE" "$PLUGIN_FULL" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+plugin_full = sys.argv[2]
+
+with open(path, 'r') as f:
+    data = json.load(f)
+
+if plugin_full in data.get('plugins', {}):
+    del data['plugins'][plugin_full]
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2)
+    print('✓ Config updated')
+else:
+    print('⚠ Plugin not found in config')
+PYEOF
+    else
+      echo -e "${YELLOW}⚠ Plugin not found in config file${NC}"
+    fi
+  else
+    echo -e "${YELLOW}⚠ Config file not found${NC}"
+  fi
+
+  # Update settings.json
+  SETTINGS_FILE="$HOME/.claude/settings.json"
+  if [[ -f "$SETTINGS_FILE" ]]; then
+    echo "Updating $SETTINGS_FILE..."
+    python3 - "$SETTINGS_FILE" "$PLUGIN_NAME" "$PLUGIN_KEY" "$PLUGIN_FULL" <<'PYEOF'
+import json
+import sys
+
+settings_path = sys.argv[1]
+plugin_name = sys.argv[2]
+plugin_key = sys.argv[3]
+plugin_full = sys.argv[4]
+
+with open(settings_path, 'r') as f:
+    data = json.load(f)
+
+modified = False
+
+# Remove from enabledPlugins
+if 'enabledPlugins' in data:
+    plugins_to_remove = [plugin_name, plugin_key, plugin_full]
+    for p in plugins_to_remove:
+        if p in data['enabledPlugins']:
+            del data['enabledPlugins'][p]
+            modified = True
+            print(f'✓ Removed from enabledPlugins: {p}')
+
+# Remove from extraKnownMarketplaces
+if 'extraKnownMarketplaces' in data:
+    marketplaces_to_remove = [plugin_name, plugin_key]
+    for m in marketplaces_to_remove:
+        if m in data['extraKnownMarketplaces']:
+            del data['extraKnownMarketplaces'][m]
+            modified = True
+            print(f'✓ Removed from extraKnownMarketplaces: {m}')
+
+# Check if statusLine references the plugin
+if 'statusLine' in data and 'command' in data['statusLine']:
+    status_cmd = data['statusLine']['command']
+    if plugin_name in status_cmd or plugin_key in status_cmd:
+        del data['statusLine']
+        modified = True
+        print('✓ Removed statusLine (plugin reference found)')
+
+if modified:
+    with open(settings_path, 'w') as f:
+        json.dump(data, f, indent=2)
+    print('✓ settings.json updated')
+else:
+    print('⚠ No changes needed in settings.json')
+PYEOF
+  else
+    echo -e "${YELLOW}⚠ settings.json not found${NC}"
+  fi
+
+  echo -e "${GREEN}Plugin '$PLUGIN_NAME' has been forcefully removed${NC}"
+}
+
 # ─── Main: Handle arguments ─────────────────────────────────────────────────
 RESUME_MODE=0
 RESUME_SESSION=""
@@ -1202,6 +1375,10 @@ if [[ "${1:-}" == "uninstall" ]]; then
 elif [[ "${1:-}" == "mcp" ]]; then
   shift
   run_mcp "$@"
+  exit $?
+elif [[ "${1:-}" == "plugin" ]]; then
+  shift
+  run_delete_plugin "$@"
   exit $?
 elif [[ "${1:-}" == "resume" ]]; then
   RESUME_MODE=1
@@ -1235,6 +1412,12 @@ elif [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
   echo "  -h, --help         Show this help message"
   echo ""
   echo "Subcommands:"
+  echo "  uninstall           Uninstall claude-launcher and optionally remove config"
+  echo "  mcp [options]       Manage MCP servers:"
+  echo "                        -l, --list     List all MCP servers"
+  echo "                        -d, --delete   Delete a specific MCP server"
+  echo "                        -a, --all      Delete all MCP servers"
+  echo "  plugin -d <name>    Forcefully delete a plugin"
   echo "  resume [id]         Resume a session (same as -r)"
   echo "  update              Check for updates (same as -u)"
   echo "  config              Interactive configuration (same as -c)"
@@ -1247,6 +1430,11 @@ elif [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
   echo "  cli config          # Change provider/model/API key (alternative)"
   echo "  cli -u              # Check for updates"
   echo "  cli update          # Check for updates (alternative)"
+  echo "  cli uninstall       # Uninstall claude-launcher"
+  echo "  cli mcp -l          # List MCP servers"
+  echo "  cli mcp -d brave    # Delete brave MCP server"
+  echo "  cli mcp -a          # Delete all MCP servers"
+  echo "  cli plugin -d hud    # Delete a plugin"
   echo ""
   exit 0
 elif [[ "${1:-}" == "-r" ]] || [[ "${1:-}" == "--resume" ]]; then

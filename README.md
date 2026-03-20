@@ -141,6 +141,36 @@ Your settings are saved to:
 
 Original settings are backed up to `~/.claude/settings.json.launcher-bak`
 
+## Uninstallation
+
+```bash
+cli uninstall
+```
+
+This removes the launcher binaries and optionally cleans up configuration files.
+
+## MCP Management
+
+Manage local MCP servers:
+
+```bash
+cli mcp -l              # List all MCP servers
+cli mcp -d <name>       # Delete a specific MCP server
+cli mcp -a              # Delete all MCP servers
+```
+
+## Plugin Management
+
+Forcefully delete a plugin (use when `claude plugin remove` fails):
+
+```bash
+cli plugin -d <name>   # Delete a plugin
+```
+
+Example:
+```bash
+cli plugin -d claude-hud
+```
 
 ## Requirements
 
