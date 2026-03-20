@@ -116,6 +116,24 @@ restore_settings() {
   fi
 }
 
+write_anthropic_settings() {
+  local model="$1"
+  mkdir -p "${HOME}/.claude"
+  python3 - "$CLAUDE_SETTINGS" "$model" <<'PYEOF'
+import json, sys
+settings_path, model = sys.argv[1], sys.argv[2]
+try:
+    with open(settings_path) as f:
+        settings = json.load(f)
+except:
+    settings = {}
+settings['model'] = model
+settings['skipDangerousModePermissionPrompt'] = True
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+PYEOF
+}
+
 write_bailian_settings() {
   local api_key="$1"
   local model="$2"
@@ -870,7 +888,7 @@ quick_launch() {
   # Save config including project directory for resume
   save_defaults
 
-  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
+  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions --model "opus[1m]" "${EXTRA_ARGS[@]}"
 }
 
 # ─── Main: Handle arguments ─────────────────────────────────────────────────
@@ -1052,7 +1070,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
   fi
   echo ""
 
-  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${RESUME_ARGS[@]}"
+  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions --model "opus[1m]" "${RESUME_ARGS[@]}"
 fi
 
 # Quick launch if no conf mode
@@ -1103,6 +1121,7 @@ case "$PLAN_CHOICE" in
       2) SELECTED_MODEL="claude-sonnet-4-6" ;;
       3) SELECTED_MODEL="claude-haiku-4-5-20251001" ;;
     esac
+    write_anthropic_settings "$SELECTED_MODEL"
     EXTRA_ARGS+=(--effort high) ;;
 
   # ── MiniMaxi (2) ─────────────────────────────────────────────────────────
