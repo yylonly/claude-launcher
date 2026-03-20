@@ -13,11 +13,20 @@ claude-launcher/
 ├── start-claude.sh       # Main launcher script (core)
 ├── install.sh           # Local installation script
 ├── install-remote.sh    # One-liner remote installation
-├── uninstall.sh         # Uninstallation script
-├── delete-plugin.sh     # Plugin deletion utility
-├── delete-mcp.sh       # MCP server deletion utility
 ├── README.md           # Project documentation
 └── CLAUDE.md           # This file
+```
+
+## Subcommands
+
+All subcommands are integrated into `start-claude.sh`:
+
+```bash
+cli uninstall              # Uninstall claude-launcher
+cli mcp -l                # List all MCP servers
+cli mcp -d <name>         # Delete a specific MCP server
+cli mcp -a                # Delete all MCP servers
+cli plugin -d <name>      # Forcefully delete a plugin
 ```
 
 ## File Dependencies
@@ -42,12 +51,6 @@ claude-launcher/
 - **Source:** GitHub Raw URL
 - **Target:** `~/.local/bin/`
 
-### uninstall.sh
-- **Config:** `~/.claude-launcher.conf`
-- **Backup:** `~/.claude/settings.json.launcher-bak`
-
-### delete-plugin.sh
-- **Target:** `~/.claude/plugins/`
 
 ## Running the Script
 
@@ -77,8 +80,6 @@ The script is interactive and will:
 - `start-claude.sh`: Main launcher script (interactive Claude Code launcher)
 - `install.sh`: Installation script (installs launcher to PATH)
 - `install-remote.sh`: Remote installation script
-- `uninstall.sh`: Uninstallation script (removes launcher and optionally configs)
-- `delete-plugin.sh`: Plugin deletion utility
 
 ## Configuration Files Created
 
@@ -91,9 +92,18 @@ The script creates/modifies these files in `$HOME`:
 ## Testing
 
 Validate bash syntax with:
+
 ```bash
 bash -n start-claude.sh
 ```
+
+## Version
+
+**Before pushing to git, update version in ALL files:**
+- `start-claude.sh` → `VERSION="X.X.X"`
+- `README.md` → version number
+- `install.sh` → `VERSION` (if exists)
+- `install-remote.sh` → `VERSION` (if exists)
 
 ## Code Architecture
 
