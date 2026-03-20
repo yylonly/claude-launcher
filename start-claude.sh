@@ -10,7 +10,7 @@ if [[ ! -t 0 ]]; then
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.1"
+VERSION="1.2.2"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -1135,6 +1135,17 @@ case "$PLAN_CHOICE" in
     PROVIDER="minimaxi"
     BASE_URL="https://api.minimaxi.com/anthropic"
     API_KEY_VAR="MINIMAX_API_KEY"
+    # Allow user to update key even if one is saved
+    if [[ -n "${MINIMAX_API_KEY:-}" ]]; then
+      echo -e "  ${DIM}Current API key is saved.${RESET}"
+      print_menu "MiniMax API Key:" \
+        "Use existing key" \
+        "Enter new key"
+      key_choice=$(pick "Key" 2 "1")
+      if [[ "$key_choice" == "2" ]]; then
+        unset MINIMAX_API_KEY
+      fi
+    fi
     require_key "$API_KEY_VAR" "MiniMax"
 
     print_menu "Select MiniMaxi Model:" \
@@ -1173,6 +1184,17 @@ case "$PLAN_CHOICE" in
     BASE_URL="https://coding.dashscope.aliyuncs.com/apps/anthropic"
     API_KEY_VAR="DASHSCOPE_API_KEY"
     restore_settings
+    # Allow user to update key even if one is saved
+    if [[ -n "${DASHSCOPE_API_KEY:-}" ]]; then
+      echo -e "  ${DIM}Current API key is saved.${RESET}"
+      print_menu "DashScope API Key:" \
+        "Use existing key" \
+        "Enter new key"
+      key_choice=$(pick "Key" 2 "1")
+      if [[ "$key_choice" == "2" ]]; then
+        unset DASHSCOPE_API_KEY
+      fi
+    fi
     require_key "$API_KEY_VAR" "Alibaba DashScope"
 
     print_menu "Select Bailian / Qwen Model:" \
@@ -1240,7 +1262,21 @@ BRAVE_SEARCH_CHOICE=$(pick "Brave Search" 2 "${DEFAULT_BRAVE_SEARCH}")
 
 # Ask for API key if enabling Brave Search
 if [[ "$BRAVE_SEARCH_CHOICE" == "1" ]]; then
-  if [[ -z "${BRAVE_API_KEY:-}" ]]; then
+  has_brave_key=0
+  if [[ -n "${BRAVE_API_KEY:-}" ]]; then
+    echo -e "  ${DIM}Current API key is saved.${RESET}"
+    print_menu "Brave Search Key:" \
+      "Use existing key" \
+      "Enter new key"
+    key_choice=$(pick "Key" 2 "1")
+    if [[ "$key_choice" == "2" ]]; then
+      has_brave_key=0
+    else
+      has_brave_key=1
+    fi
+  fi
+
+  if [[ $has_brave_key -eq 0 ]]; then
     read -rsp "  Enter Brave Search API key: " BRAVE_API_KEY
     echo ""
     if [[ -z "$BRAVE_API_KEY" ]]; then
@@ -1263,7 +1299,23 @@ TAVILY_SEARCH_CHOICE=$(pick "Tavily Search" 2 "${DEFAULT_TAVILY_SEARCH}")
 
 # Ask for API key if enabling Tavily Search
 if [[ "$TAVILY_SEARCH_CHOICE" == "1" ]]; then
-  if [[ -z "${TAVILY_API_KEY:-}" ]]; then
+  has_tavily_key=0
+  if [[ -n "${TAVILY_API_KEY:-}" ]]; then
+    echo -e "  ${DIM}Current API key is saved.${RESET}"
+    print_menu "Tavily Search Key:" \
+      "Use existing key" \
+      "Enter new key"
+    key_choice=$(pick "Key" 2 "1")
+    if [[ "$key_choice" == "2" ]]; then
+      has_tavily_key=0
+    else
+      has_tavily_key=1
+    fi
+  else
+    has_tavily_key=0
+  fi
+
+  if [[ $has_tavily_key -eq 0 ]]; then
     read -rsp "  Enter Tavily Search API key (starts with tvly-): " TAVILY_API_KEY
     echo ""
     if [[ -z "$TAVILY_API_KEY" ]]; then

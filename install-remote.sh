@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # Version
-VERSION="1.2.1"
+VERSION="1.2.2"
 
 INSTALL_NAME="claude-launcher"
 INSTALL_DIR="${HOME}/.local/bin"

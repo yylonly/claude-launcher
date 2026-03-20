@@ -9,7 +9,7 @@
 set -e
 
 # Version
-VERSION="1.2.1"
+VERSION="1.2.2"
 
 PLUGIN_DIR="$HOME/.claude/plugins"
 CONFIG_FILE="$PLUGIN_DIR/installed_plugins.json"

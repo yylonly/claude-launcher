@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Version
-VERSION="1.2.1"
+VERSION="1.2.2"
 
 # Colors
 BOLD='\033[1m'
