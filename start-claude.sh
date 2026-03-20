@@ -4,6 +4,11 @@
 
 set -euo pipefail
 
+# ─── Re-run with PTY if stdin is not a terminal ─────────────────────────────
+if [[ ! -t 0 ]]; then
+  exec script -q /dev/null "$0" "$@"
+fi
+
 # ─── Version & Update ─────────────────────────────────────────────────────
 VERSION="1.2.1"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
@@ -225,7 +230,7 @@ EOF
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 print_header() {
-  clear
+  clear 2>/dev/null || true
   echo -e "${CYAN}${BOLD}"
   echo "  ╔════════════════════════════════════════╗"
   echo "  ║         Claude Code Launcher           ║"
@@ -367,32 +372,51 @@ check_claude_code() {
       echo ""
     fi
 
-    # Check plugin marketplace for updates
-    echo -e "  ${DIM}Checking plugin marketplace...${RESET}"
-    if claude plugin marketplace update 2>/dev/null; then
-      echo -e "  ${GREEN}✓ Marketplace up to date${RESET}"
+    # Check plugin marketplace for updates (press Enter to skip)
+    echo -n -e "  ${DIM}Checking plugin marketplace... (Enter to skip)${RESET}"
+    local market_output market_exit
+    local skip=0
+    # Wait for Enter key with 5 second timeout
+    if IFS= read -r -t 5 -n 1; then
+      echo "  Skipped"
+      skip=1
     else
-      echo -e "  ${YELLOW}⚠ Marketplace check failed${RESET}"
+      echo ""
+      market_output=$(claude plugin marketplace update 2>/dev/null) && market_exit=0 || market_exit=$?
+      [[ -n "$market_output" ]] && echo "$market_output" | sed 's/^/  /'
+      if [[ $market_exit -eq 0 ]]; then
+        echo -e "  ${GREEN}✓ Marketplace up to date${RESET}"
+      else
+        echo -e "  ${YELLOW}⚠ Marketplace check failed${RESET}"
+      fi
     fi
     echo ""
 
-    # Check for plugin updates - list first, then update each
-    echo -e "  ${DIM}Checking plugin updates...${RESET}"
-    local plugin_list
-    plugin_list=$(claude plugin list 2>/dev/null | grep -oE '@[a-zA-Z0-9_-]+' | tr -d '@' || true)
-    if [[ -n "$plugin_list" ]]; then
-      for plugin in $plugin_list; do
-        echo -e "  ${DIM}Updating plugin: ${plugin}${RESET}"
-        claude plugin update "$plugin" 2>/dev/null || true
-      done
-      echo -e "  ${GREEN}✓ Plugins updated${RESET}"
+    # Check for plugin updates (press Enter to skip)
+    echo -n -e "  ${DIM}Checking plugin updates... (Enter to skip)${RESET}"
+    local skip_plugin=0
+    if IFS= read -r -t 5 -n 1; then
+      echo "  Skipped"
+      skip_plugin=1
     else
-      echo -e "  ${GREEN}✓ No plugins to update${RESET}"
+      echo ""
+      local plugin_list
+      plugin_list=$(claude plugin list 2>/dev/null | grep -oE '@[a-zA-Z0-9_-]+' | tr -d '@' || true)
+      if [[ -n "$plugin_list" ]]; then
+        for plugin in $plugin_list; do
+          echo -e "  ${DIM}Updating plugin: ${plugin}${RESET}"
+          local plugin_output
+          plugin_output=$(claude plugin update "$plugin" 2>/dev/null) || true
+          [[ -n "$plugin_output" ]] && echo "$plugin_output" | sed 's/^/  /'
+        done
+        echo -e "  ${GREEN}✓ Plugins updated${RESET}"
+      else
+        echo -e "  ${GREEN}✓ No plugins to update${RESET}"
+      fi
     fi
     echo ""
   fi
 
-  sleep 1
 }
 
 # ─── Claude-hud plugin check and install ─────────────────────────────────────
@@ -403,22 +427,21 @@ check_claude_hud() {
 
   # Try to add marketplace, install and enable plugin
   # Commands are idempotent - safe to run even if already installed
-  echo -e "${CYAN}Setting up Claude-hud plugin...${RESET}"
-  claude plugin marketplace add "$plugin_repo" 2>/dev/null || true
-  claude plugin install claude-hud 2>/dev/null || true
-  claude plugin enable claude-hud 2>/dev/null || true
+  echo -e "  ${CYAN}Setting up Claude-hud plugin...${RESET}"
+  claude plugin marketplace add "$plugin_repo" 2>/dev/null | sed 's/^/  /' || true
+  claude plugin install claude-hud 2>/dev/null | sed 's/^/  /' || true
+  claude plugin enable claude-hud 2>/dev/null | sed 's/^/  /' || true
 
   # Configure the plugin with all features enabled
   configure_claude_hud_all_features
 
   echo -e "  ${GREEN}✓${RESET} Claude-hud plugin is ready (all features enabled)"
   echo ""
-  sleep 1
 }
 
 # ─── Configure Claude-hud plugin with all features ───────────────────────────
 configure_claude_hud_all_features() {
-  echo -e "${CYAN}Configuring Claude-hud with all features...${RESET}"
+  echo -e "  ${CYAN}Configuring Claude-hud with all features...${RESET}"
 
   mkdir -p "${HOME}/.claude"
 
@@ -503,17 +526,17 @@ PYEOF
 EOF
 
   chmod 600 "$CLAUDE_SETTINGS"
-  echo -e "${GREEN}✓ Claude-hud configured with all features!${RESET}"
+  echo -e "  ${GREEN}✓ Claude-hud configured with all features!${RESET}"
 }
 
 # ─── Configure Brave Search MCP ─────────────────────────────────────────────────
 configure_brave_search() {
   local api_key="$1"
 
-  echo -e "${CYAN}Configuring Brave Search MCP...${RESET}"
+  echo -e "  ${CYAN}Configuring Brave Search MCP...${RESET}"
 
   # Use python to update settings.json with Brave MCP
-  python3 - "$CLAUDE_SETTINGS" "$api_key" <<'PYEOF'
+  python3 - "$CLAUDE_SETTINGS" "$api_key" <<'PYEOF' | sed 's/^/  /'
 import json
 import sys
 
@@ -591,17 +614,17 @@ with open(claude_json_path, 'w') as f:
 print("Brave Search MCP configured successfully")
 PYEOF
 
-  echo -e "${GREEN}✓ Brave Search MCP configured!${RESET}"
+  echo -e "  ${GREEN}✓ Brave Search MCP configured!${RESET}"
 }
 
 # ─── Configure Tavily MCP ────────────────────────────────────────────────────────
 configure_tavily_search() {
   local api_key="$1"
 
-  echo -e "${CYAN}Configuring Tavily MCP...${RESET}"
+  echo -e "  ${CYAN}Configuring Tavily MCP...${RESET}"
 
   # Use python to update .claude.json with Tavily MCP
-  python3 - "$api_key" <<'PYEOF'
+  python3 - "$api_key" <<'PYEOF' | sed 's/^/  /'
 import json
 import sys
 import os
@@ -650,12 +673,12 @@ with open(claude_json_path, 'w') as f:
 print("Tavily MCP configured successfully")
 PYEOF
 
-  echo -e "${GREEN}✓ Tavily MCP configured!${RESET}"
+  echo -e "  ${GREEN}✓ Tavily MCP configured!${RESET}"
 }
 
 # ─── Update settings.local.json with MCP permissions ─────────────────────────────
 update_mcp_permissions() {
-  echo -e "${CYAN}Updating MCP permissions...${RESET}"
+  echo -e "  ${CYAN}Updating MCP permissions...${RESET}"
 
   local settings_local="${HOME}/.claude/settings.local.json"
 
@@ -663,7 +686,7 @@ update_mcp_permissions() {
   mkdir -p "$(dirname "$settings_local")"
 
   # Create or update settings.local.json
-  python3 - "$settings_local" <<'PYEOF'
+  python3 - "$settings_local" <<'PYEOF' | sed 's/^/  /'
 import json
 import sys
 import os
@@ -707,7 +730,7 @@ with open(settings_local_path, 'w') as f:
 print("MCP permissions updated")
 PYEOF
 
-  echo -e "${GREEN}✓ MCP permissions updated!${RESET}"
+  echo -e "  ${GREEN}✓ MCP permissions updated!${RESET}"
 }
 
 # ─── Quick launch with saved config ─────────────────────────────────────────
@@ -752,11 +775,13 @@ quick_launch() {
       fi
 
       case "${DEFAULT_MC_2:-1}" in
-        1) SELECTED_MODEL="MiniMax-M2.5" ;;
-        2) SELECTED_MODEL="MiniMax-M2.5-highspeed" ;;
-        3) SELECTED_MODEL="MiniMax-M2.1" ;;
-        4) SELECTED_MODEL="MiniMax-M2" ;;
-        *) SELECTED_MODEL="MiniMax-M2.5" ;;
+        1) SELECTED_MODEL="MiniMax-M2.7" ;;
+        2) SELECTED_MODEL="MiniMax-M2.7-highspeed" ;;
+        3) SELECTED_MODEL="MiniMax-M2.5" ;;
+        4) SELECTED_MODEL="MiniMax-M2.5-highspeed" ;;
+        5) SELECTED_MODEL="MiniMax-M2.1" ;;
+        6) SELECTED_MODEL="MiniMax-M2" ;;
+        *) SELECTED_MODEL="MiniMax-M2.7" ;;
       esac
 
       write_minimax_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
@@ -908,7 +933,6 @@ load_defaults
 if [[ "$CONF_MODE" -eq 0 && -z "$DEFAULT_PLAN" ]]; then
   echo -e "${YELLOW}No saved configuration found.${RESET}"
   echo "Starting interactive configuration..."
-  sleep 1
   CONF_MODE=1
 fi
 
@@ -965,11 +989,13 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
         exit 1
       fi
       case "${DEFAULT_MC_2:-1}" in
-        1) SELECTED_MODEL="MiniMax-M2.5" ;;
-        2) SELECTED_MODEL="MiniMax-M2.5-highspeed" ;;
-        3) SELECTED_MODEL="MiniMax-M2.1" ;;
-        4) SELECTED_MODEL="MiniMax-M2" ;;
-        *) SELECTED_MODEL="MiniMax-M2.5" ;;
+        1) SELECTED_MODEL="MiniMax-M2.7" ;;
+        2) SELECTED_MODEL="MiniMax-M2.7-highspeed" ;;
+        3) SELECTED_MODEL="MiniMax-M2.5" ;;
+        4) SELECTED_MODEL="MiniMax-M2.5-highspeed" ;;
+        5) SELECTED_MODEL="MiniMax-M2.1" ;;
+        6) SELECTED_MODEL="MiniMax-M2" ;;
+        *) SELECTED_MODEL="MiniMax-M2.7" ;;
       esac
       write_minimax_settings "$MINIMAX_API_KEY" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
       ensure_onboarding
@@ -1089,19 +1115,23 @@ case "$PLAN_CHOICE" in
     print_menu "Select MiniMaxi Model:" \
       "─────────────────────────────────────────" \
       "Recommended Model:" \
-      "  MiniMax-M2.5           — Latest flagship, strong coding and reasoning" \
+      "  MiniMax-M2.7           — Latest flagship, SOTA coding, reasoning & agents" \
+      "  MiniMax-M2.7-highspeed  — Same as M2.7, faster inference" \
       "─────────────────────────────────────────" \
       "More Models:" \
-      "  MiniMax-M2.5-highspeed — Same as M2.5, faster inference" \
-      "  MiniMax-M2.1           — 230B parameters, multilingual and code" \
-      "  MiniMax-M2             — 200k context, agentic calls"
-    MC=$(pick "Model" 4 "$DEFAULT_MC_2")
+      "  MiniMax-M2.5            — Previous flagship, strong coding and reasoning" \
+      "  MiniMax-M2.5-highspeed  — Same as M2.5, faster inference" \
+      "  MiniMax-M2.1            — 230B parameters, multilingual and code" \
+      "  MiniMax-M2              — 200k context, agentic calls"
+    MC=$(pick "Model" 6 "$DEFAULT_MC_2")
     DEFAULT_MC_2=$MC
     case "$MC" in
-      1) SELECTED_MODEL="MiniMax-M2.5" ;;
-      2) SELECTED_MODEL="MiniMax-M2.5-highspeed" ;;
-      3) SELECTED_MODEL="MiniMax-M2.1" ;;
-      4) SELECTED_MODEL="MiniMax-M2" ;;
+      1) SELECTED_MODEL="MiniMax-M2.7" ;;
+      2) SELECTED_MODEL="MiniMax-M2.7-highspeed" ;;
+      3) SELECTED_MODEL="MiniMax-M2.5" ;;
+      4) SELECTED_MODEL="MiniMax-M2.5-highspeed" ;;
+      5) SELECTED_MODEL="MiniMax-M2.1" ;;
+      6) SELECTED_MODEL="MiniMax-M2" ;;
     esac
 
     write_minimax_settings "${MINIMAX_API_KEY}" "${SELECTED_MODEL}" "${AGENT_TEAMS_CHOICE}"
@@ -1181,7 +1211,7 @@ echo ""
 print_menu "Install Brave Search MCP?" \
   "[Yes] Enable  — Enable Brave Search for web search (requires API key)" \
   "[No]  Disable — Skip Brave Search"
-BRAVE_SEARCH_CHOICE=$(pick "Brave Search" 2 "2")
+BRAVE_SEARCH_CHOICE=$(pick "Brave Search" 2 "${DEFAULT_BRAVE_SEARCH}")
 
 # Ask for API key if enabling Brave Search
 if [[ "$BRAVE_SEARCH_CHOICE" == "1" ]]; then
@@ -1204,7 +1234,7 @@ echo ""
 print_menu "Install Tavily Search MCP?" \
   "[Yes] Enable  — Enable Tavily Search for web search (requires API key)" \
   "[No]  Disable — Skip Tavily Search"
-TAVILY_SEARCH_CHOICE=$(pick "Tavily Search" 2 "2")
+TAVILY_SEARCH_CHOICE=$(pick "Tavily Search" 2 "${DEFAULT_TAVILY_SEARCH}")
 
 # Ask for API key if enabling Tavily Search
 if [[ "$TAVILY_SEARCH_CHOICE" == "1" ]]; then
@@ -1268,7 +1298,5 @@ if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
   echo -e "  ${DIM}Agent   :${RESET} ${GREEN}Enabled${RESET}"
 fi
 echo ""
-echo -e "  ${DIM}Press Ctrl+C to cancel...${RESET}"
-sleep 1
 
 exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
