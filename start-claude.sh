@@ -888,7 +888,7 @@ quick_launch() {
   # Save config including project directory for resume
   save_defaults
 
-  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions --model "opus[1m]" "${EXTRA_ARGS[@]}"
+  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
 }
 
 # ─── Main: Handle arguments ─────────────────────────────────────────────────
@@ -1070,7 +1070,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
   fi
   echo ""
 
-  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions --model "opus[1m]" "${RESUME_ARGS[@]}"
+  exec claude --model "$SELECTED_MODEL" --permission-mode bypassPermissions "${RESUME_ARGS[@]}"
 fi
 
 # Quick launch if no conf mode
