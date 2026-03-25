@@ -10,7 +10,7 @@ if [[ ! -t 0 ]]; then
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.3"
+VERSION="1.2.4"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -784,7 +784,6 @@ quick_launch() {
         3) SELECTED_MODEL="claude-haiku-4-5-20251001" ;;
         *) SELECTED_MODEL="claude-sonnet-4-6" ;;
       esac
-      EXTRA_ARGS+=(--effort high)
       ;;
 
     2)  # MiniMaxi
@@ -812,7 +811,6 @@ quick_launch() {
       ensure_onboarding
 
       EXTRA_ARGS+=(
-        --effort medium
         --append-system-prompt "You are using the MiniMax API. Leverage MiniMax model strengths for text generation, reasoning, and code tasks."
       )
       ;;
@@ -847,7 +845,6 @@ quick_launch() {
       ensure_onboarding
 
       EXTRA_ARGS+=(
-        --effort medium
         --append-system-prompt "You are using Alibaba Bailian (DashScope) with Qwen models. Leverage Qwen's strengths in multilingual tasks, long-context understanding, and coding."
       )
       ;;
@@ -1635,7 +1632,7 @@ case "$PLAN_CHOICE" in
       3) SELECTED_MODEL="claude-haiku-4-5-20251001" ;;
     esac
     write_anthropic_settings "$SELECTED_MODEL"
-    EXTRA_ARGS+=(--effort high) ;;
+    ;;
 
   # ── MiniMaxi (2) ─────────────────────────────────────────────────────────
   2)
@@ -1681,7 +1678,6 @@ case "$PLAN_CHOICE" in
     ensure_onboarding
 
     EXTRA_ARGS+=(
-      --effort medium
       --append-system-prompt "You are using the MiniMax API. Leverage MiniMax model strengths for text generation, reasoning, and code tasks."
     ) ;;
 
@@ -1735,7 +1731,6 @@ case "$PLAN_CHOICE" in
     ensure_onboarding
 
     EXTRA_ARGS+=(
-      --effort medium
       --append-system-prompt "You are using Alibaba Bailian (DashScope) with Qwen models. Leverage Qwen's strengths in multilingual tasks, long-context understanding, and coding."
     ) ;;
 
@@ -1763,7 +1758,7 @@ fi
 # ─── Step 2.7 — Brave Search MCP Option ────────────────────────────────────────
 echo ""
 print_menu "Install Brave Search MCP?" \
-  "[Yes] Enable  — Enable Brave Search for web search (requires API key)" \
+  "[Yes] Enable  — Enable Brave Search (requires API key, needs VPN)" \
   "[No]  Disable — Skip Brave Search"
 BRAVE_SEARCH_CHOICE=$(pick "Brave Search" 2 "${DEFAULT_BRAVE_SEARCH}")
 
