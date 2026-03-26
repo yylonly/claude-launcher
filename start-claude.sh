@@ -339,12 +339,20 @@ check_claude_code() {
         exit 1
       fi
 
+      # Ensure ~/.local/bin is in PATH for this session
+      export PATH="$HOME/.local/bin:$PATH"
+
+      # Add to ~/.zshrc for persistence across sessions
+      if ! grep -q '~/.local/bin' ~/.zshrc 2>/dev/null; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+      fi
+
       # Re-check if installation succeeded
       if ! command -v claude &>/dev/null; then
         echo ""
         echo -e "${YELLOW}Installation completed but 'claude' command not found.${RESET}"
-        echo "Please restart your terminal or run:"
-        echo "  source ~/.bashrc  # or ~/.zshrc"
+        echo "Try running: source ~/.zshrc"
+        echo "Or manually add to ~/.zshrc: export PATH=\"\$HOME/.local/bin:\$PATH\""
         exit 1
       fi
 
