@@ -347,6 +347,9 @@ check_claude_code() {
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
       fi
 
+      # Source ~/.zshrc to pick up updated PATH immediately
+      source ~/.zshrc
+
       # Re-check if installation succeeded
       if ! command -v claude &>/dev/null; then
         echo ""
