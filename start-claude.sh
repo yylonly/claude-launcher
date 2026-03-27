@@ -10,7 +10,7 @@ if [[ ! -t 0 ]]; then
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.4"
+VERSION="1.2.5"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -470,88 +470,13 @@ check_claude_code() {
       exit 1
     fi
   else
-    # Claude is installed, check for updates
+    # Claude is installed, show version
     local current_version
     current_version=$(claude --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[[0-9]+(\.[0-9]+)?' | head -n1 || echo "unknown")
 
     echo -e "  ${DIM}Current version:${RESET} ${current_version}"
     echo ""
-
-    # Check for updates via GitHub API (press Enter to skip)
-    echo -n -e "  ${DIM}Checking for updates... (Enter to skip)${RESET}"
-    local latest_version
-    # Wait for Enter key with 5 second timeout
-    if IFS= read -r -t 5 -n 1; then
-      echo "  Skipped"
-    else
-      echo ""
-      latest_version=$(curl -s https://api.github.com/repos/anthropics/claude-code/releases/latest 2>/dev/null | grep -oE '"tag_name": "[^"]+"' | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || echo "")
-
-      if [[ -n "$latest_version" && "$latest_version" != "$current_version" ]]; then
-        echo ""
-        echo -e "${YELLOW}Update available:${RESET} ${current_version} → ${GREEN}${latest_version}${RESET}"
-        read -rp "  Update now? [y/N]: " update_choice
-        echo ""
-
-        if [[ "$update_choice" =~ ^[Yy]$ ]]; then
-          echo -e "${CYAN}Updating Claude Code...${RESET}"
-          if claude update; then
-            echo ""
-            echo -e "${GREEN}✓ Update successful!${RESET}"
-          else
-            echo ""
-            echo -e "${YELLOW}Update failed. You can retry later with:${RESET} claude update"
-          fi
-          echo ""
-        fi
-      else
-        echo -e "  ${GREEN}✓ Up to date${RESET}"
-        echo ""
-      fi
-    fi
-
-    # Check plugin marketplace for updates (press Enter to skip)
-    echo -n -e "  ${DIM}Checking plugin marketplace... (Enter to skip)${RESET}"
-    local market_output market_exit
-    local skip=0
-    # Wait for Enter key with 5 second timeout
-    if IFS= read -r -t 5 -n 1; then
-      echo "  Skipped"
-      skip=1
-    else
-      echo ""
-      market_output=$(claude plugin marketplace update 2>/dev/null) && market_exit=0 || market_exit=$?
-      [[ -n "$market_output" ]] && echo "$market_output" | sed 's/^/  /'
-      if [[ $market_exit -eq 0 ]]; then
-        echo -e "  ${GREEN}✓ Marketplace up to date${RESET}"
-      else
-        echo -e "  ${YELLOW}⚠ Marketplace check failed${RESET}"
-      fi
-    fi
-    echo ""
-
-    # Check for plugin updates (press Enter to skip)
-    echo -n -e "  ${DIM}Checking plugin updates... (Enter to skip)${RESET}"
-    local skip_plugin=0
-    if IFS= read -r -t 5 -n 1; then
-      echo "  Skipped"
-      skip_plugin=1
-    else
-      echo ""
-      local plugin_list
-      plugin_list=$(claude plugin list 2>/dev/null | grep -oE '@[a-zA-Z0-9_-]+' | tr -d '@' || true)
-      if [[ -n "$plugin_list" ]]; then
-        for plugin in $plugin_list; do
-          echo -e "  ${DIM}Updating plugin: ${plugin}${RESET}"
-          local plugin_output
-          plugin_output=$(claude plugin update "$plugin" 2>/dev/null) || true
-          [[ -n "$plugin_output" ]] && echo "$plugin_output" | sed 's/^/  /'
-        done
-        echo -e "  ${GREEN}✓ Plugins updated${RESET}"
-      else
-        echo -e "  ${GREEN}✓ No plugins to update${RESET}"
-      fi
-    fi
+    echo -e "  ${DIM}Tip: Run ${GREEN}claude update${DIM} to update Claude Code${RESET}"
     echo ""
   fi
 
@@ -570,10 +495,12 @@ check_claude_hud() {
   claude plugin install claude-hud 2>/dev/null | sed 's/^/  /' || true
   claude plugin enable claude-hud 2>/dev/null | sed 's/^/  /' || true
 
-  # Configure the plugin with all features enabled
-  configure_claude_hud_all_features
-
-  echo -e "  ${GREEN}✓${RESET} Claude-hud plugin is ready (all features enabled)"
+  # Configure the plugin with all features enabled (continue even if fails)
+  if configure_claude_hud_all_features; then
+    echo -e "  ${GREEN}✓${RESET} Claude-hud plugin is ready (all features enabled)"
+  else
+    echo -e "  ${YELLOW}⚠${RESET} Claude-hud configuration skipped (non-critical)"
+  fi
   echo ""
 }
 
@@ -597,60 +524,31 @@ configure_claude_hud_all_features() {
     return 1
   fi
 
-  # Generate dynamic command that finds latest plugin version
-  local statusline_cmd="bash -c 'plugin_dir=\$(ls -d \"\$HOME\"/.claude/plugins/cache/claude-hud/claude-hud/*/ 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1); exec \"${runtime_path}\" \"\${plugin_dir}src/index.ts\"'"
+  # Find the latest claude-hud version directory
+  local plugin_dir
+  plugin_dir=$(ls -d "$HOME/.claude/plugins/cache/claude-hud/claude-hud"/*/ 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1)
 
-  # Use python to merge settings
-  python3 - "$CLAUDE_SETTINGS" "$statusline_cmd" <<'PYEOF'
-import json
-import sys
+  if [[ -z "$plugin_dir" ]]; then
+    echo -e "${YELLOW}⚠ Claude-hud plugin directory not found, skipping HUD config${RESET}"
+    return 1
+  fi
 
-settings_path = sys.argv[1]
-statusline_cmd = sys.argv[2]
+  # Generate statusline command
+  local statusline_cmd="exec ${runtime_path} ${plugin_dir}/src/index.ts"
 
-settings = {}
-try:
-    with open(settings_path) as f:
-        settings = json.load(f)
-except:
-    pass
-
-# Ensure enabledPlugins exists
-if 'enabledPlugins' not in settings:
-    settings['enabledPlugins'] = {}
-
-# Add claude-hud to enabled plugins (both formats)
-settings['enabledPlugins']['claude-hud'] = True
-settings['enabledPlugins']['claude-hud@claude-hud'] = True
-
-# Add extraKnownMarketplaces
-if 'extraKnownMarketplaces' not in settings:
-    settings['extraKnownMarketplaces'] = {}
-settings['extraKnownMarketplaces']['claude-hud'] = {
-    "source": {
-        "source": "github",
-        "repo": "jarrodwatts/claude-hud"
-    }
-}
-
-# Set statusLine with dynamic version lookup
-settings['statusLine'] = {
-    "type": "command",
-    "command": statusline_cmd
-}
-
-# Ensure skipDangerousModePermissionPrompt is set
-settings['skipDangerousModePermissionPrompt'] = True
-
-with open(settings_path, 'w') as f:
-    json.dump(settings, f, indent=2)
-PYEOF
+  # Use python to merge settings (with timeout)
+  echo -e "  ${DIM}Writing settings...${RESET}"
+  local python_result
+  python_result=$(python3 - "$CLAUDE_SETTINGS" "$statusline_cmd" 2>&1) || {
+    echo -e "${RED}✗ Python config failed: $python_result${RESET}"
+    return 1
+  }
 
   # Create config file with all features enabled
   local plugin_config_dir="${HOME}/.claude/plugins/claude-hud"
   mkdir -p "$plugin_config_dir"
 
-  cat > "$plugin_config_dir/config.json" <<EOF
+  cat > "$plugin_config_dir/config.json" <<'EOF'
 {
   "display": {
     "showTools": true,
@@ -663,7 +561,7 @@ PYEOF
 }
 EOF
 
-  chmod 600 "$CLAUDE_SETTINGS"
+  chmod 600 "$CLAUDE_SETTINGS" 2>/dev/null || true
   echo -e "  ${GREEN}✓ Claude-hud configured with all features!${RESET}"
 }
 
