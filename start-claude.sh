@@ -521,7 +521,7 @@ configure_claude_hud_all_features() {
 
   if [[ -z "$runtime_path" ]]; then
     echo -e "${YELLOW}⚠ No runtime found (bun/node), skipping HUD config${RESET}"
-    return 1
+    return 0
   fi
 
   # Find the latest claude-hud version directory
@@ -530,19 +530,45 @@ configure_claude_hud_all_features() {
 
   if [[ -z "$plugin_dir" ]]; then
     echo -e "${YELLOW}⚠ Claude-hud plugin directory not found, skipping HUD config${RESET}"
-    return 1
+    return 0
   fi
 
   # Generate statusline command
   local statusline_cmd="exec ${runtime_path} ${plugin_dir}/src/index.ts"
 
-  # Use python to merge settings (with timeout)
+  # Write settings using Python - create temp script to avoid heredoc issues
+  local temp_py=$(mktemp).py
+  cat > "$temp_py" <<PYEOF
+import json, sys
+settings_path = sys.argv[1]
+statusline_cmd = sys.argv[2]
+try:
+    with open(settings_path) as f:
+        settings = json.load(f)
+except:
+    settings = {}
+if 'enabledPlugins' not in settings:
+    settings['enabledPlugins'] = {}
+settings['enabledPlugins']['claude-hud'] = True
+settings['enabledPlugins']['claude-hud@claude-hud'] = True
+if 'extraKnownMarketplaces' not in settings:
+    settings['extraKnownMarketplaces'] = {}
+settings['extraKnownMarketplaces']['claude-hud'] = {"source": {"source": "github", "repo": "jarrodwatts/claude-hud"}}
+settings['statusLine'] = {"type": "command", "command": statusline_cmd}
+settings['skipDangerousModePermissionPrompt'] = True
+with open(settings_path, 'w') as f:
+    json.dump(settings, f, indent=2)
+PYEOF
+
   echo -e "  ${DIM}Writing settings...${RESET}"
-  local python_result
-  python_result=$(python3 - "$CLAUDE_SETTINGS" "$statusline_cmd" 2>&1) || {
-    echo -e "${RED}✗ Python config failed: $python_result${RESET}"
-    return 1
-  }
+  python3 "$temp_py" "$CLAUDE_SETTINGS" "$statusline_cmd"
+  local python_exit=$?
+  rm -f "$temp_py"
+
+  if [[ $python_exit -ne 0 ]]; then
+    echo -e "${RED}✗ Python config failed (exit $python_exit)${RESET}"
+    return 0
+  fi
 
   # Create config file with all features enabled
   local plugin_config_dir="${HOME}/.claude/plugins/claude-hud"
