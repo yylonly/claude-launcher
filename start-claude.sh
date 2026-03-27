@@ -309,6 +309,109 @@ require_key() {
   fi
 }
 
+# ─── Dependency check & install ──────────────────────────────────────────────
+check_dependencies() {
+  echo -e "${CYAN}${BOLD}  Checking dependencies...${RESET}"
+  echo ""
+
+  local missing_deps=()
+  local missing_optional=()
+
+  # Required dependencies
+  local deps=("bash" "curl" "python3")
+  for dep in "${deps[@]}"; do
+    if ! command -v "$dep" &>/dev/null; then
+      missing_deps+=("$dep")
+    fi
+  done
+
+  # Claude Code (required)
+  if ! command -v claude &>/dev/null; then
+    missing_deps+=("claude")
+  fi
+
+  # Optional: bun or node (needed for Claude-HUD)
+  if ! command -v bun &>/dev/null && ! command -v node &>/dev/null; then
+    missing_optional+=("bun")
+  fi
+
+  # Report status
+  echo -e "  ${GREEN}✓${RESET} bash: $(bash --version | head -1)"
+  echo -e "  ${GREEN}✓${RESET} curl: $(curl --version | head -1 | awk '{print $1, $2}')"
+  echo -e "  ${GREEN}✓${RESET} python3: $(python3 --version)"
+  if command -v claude &>/dev/null; then
+    echo -e "  ${GREEN}✓${RESET} claude: installed"
+  else
+    echo -e "  ${YELLOW}✗${RESET} claude: not installed"
+  fi
+
+  if command -v bun &>/dev/null; then
+    echo -e "  ${GREEN}✓${RESET} bun: $(bun --version)"
+  elif command -v node &>/dev/null; then
+    echo -e "  ${GREEN}✓${RESET} node: $(node --version)"
+  else
+    echo -e "  ${DIM}○${RESET} bun/node: not installed (optional, for Claude-HUD)"
+  fi
+
+  # Install missing required dependencies
+  if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    echo ""
+    echo -e "${YELLOW}Missing required dependencies:${RESET} ${missing_deps[*]}"
+    echo ""
+    read -rp "  Install missing dependencies with brew? [Y/n]: " install_choice
+    echo ""
+
+    if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
+      for dep in "${missing_deps[@]}"; do
+        echo -e "  ${CYAN}Installing $dep...${RESET}"
+        if [[ "$dep" == "claude" ]]; then
+          echo '  Follow the official guide: https://claude.ai/code'
+          echo '  Or run: curl -sSL https://claude.ai/install.sh | bash'
+        elif [[ "$dep" == "python3" ]]; then
+          brew install python3 || echo -e "  ${RED}Failed to install python3${RESET}"
+        else
+          brew install "$dep" || echo -e "  ${RED}Failed to install $dep${RESET}"
+        fi
+      done
+
+      # Re-check after installation
+      echo ""
+      echo -e "${CYAN}Re-checking dependencies...${RESET}"
+      local still_missing=()
+      for dep in "${missing_deps[@]}"; do
+        if ! command -v "$dep" &>/dev/null; then
+          still_missing+=("$dep")
+        fi
+      done
+
+      if [[ ${#still_missing[@]} -gt 0 ]]; then
+        echo ""
+        echo -e "${RED}Still missing:${RESET} ${still_missing[*]}"
+        echo "Please install manually and run again."
+        exit 1
+      fi
+    else
+      echo "Cannot proceed without required dependencies."
+      exit 1
+    fi
+  fi
+
+  # Offer to install optional bun if missing
+  if [[ ${#missing_optional[@]} -gt 0 ]]; then
+    echo ""
+    echo -e "${DIM}Note: bun is optional but recommended for Claude-HUD${RESET}"
+    read -rp "  Install bun now? [y/N]: " install_bun
+    echo ""
+
+    if [[ "$install_bun" =~ ^[Yy]$ ]]; then
+      echo -e "  ${CYAN}Installing bun...${RESET}"
+      curl -fsSL https://bun.sh/install | bash || echo -e "  ${RED}Failed to install bun${RESET}"
+    fi
+  fi
+
+  echo ""
+}
+
 # ─── Claude Code installation check ──────────────────────────────────────────
 check_claude_code() {
   echo -e "${CYAN}${BOLD}  Checking Claude Code installation...${RESET}"
@@ -1475,8 +1578,9 @@ if [[ "$CONF_MODE" -eq 0 && -z "$DEFAULT_PLAN" ]]; then
   CONF_MODE=1
 fi
 
-# ─── In config mode: check Claude Code ────────────────────────────────────────
+# ─── In config mode: check dependencies & Claude Code ─────────────────────────
 if [[ "$CONF_MODE" -eq 1 ]]; then
+  check_dependencies
   check_claude_code
 fi
 
