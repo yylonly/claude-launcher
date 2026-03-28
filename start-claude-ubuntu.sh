@@ -340,8 +340,15 @@ check_dependencies() {
   fi
 
   # Optional: bun or node (needed for Claude-HUD)
+  local node_version=""
+  if command -v node &>/dev/null; then
+    node_version=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
+  fi
+
   if ! command -v bun &>/dev/null && ! command -v node &>/dev/null; then
     missing_optional+=("bun")
+  elif [[ -n "$node_version" && "$node_version" -lt 20 ]]; then
+    echo -e "  ${YELLOW}⚠ Node.js v${node_version} detected (Claude-HUD requires >=20)${RESET}"
   fi
 
   # Report status
@@ -409,16 +416,19 @@ check_dependencies() {
     fi
   fi
 
-  # Offer to install optional bun if missing
-  if [[ ${#missing_optional[@]} -gt 0 ]]; then
+  # Offer to install optional bun if missing or node version is old
+  if [[ ${#missing_optional[@]} -gt 0 ]] || [[ "$node_version" -lt 20 2>/dev/null ]]; then
     echo ""
-    echo -e "${DIM}Note: bun is optional but recommended for Claude-HUD${RESET}"
+    echo -e "${DIM}Note: bun is recommended for Claude-HUD (Node.js <20 has compatibility issues)${RESET}"
     read -rp "  Install bun now? [y/N]: " install_bun
     echo ""
 
     if [[ "$install_bun" =~ ^[Yy]$ ]]; then
       echo -e "  ${CYAN}Installing bun...${RESET}"
       curl -fsSL https://bun.sh/install | bash || echo -e "  ${RED}Failed to install bun${RESET}"
+    elif [[ -n "$node_version" && "$node_version" -lt 20 ]]; then
+      echo -e "${YELLOW}⚠ Node.js v${node_version} may not work with Claude-HUD${RESET}"
+      echo -e "  ${DIM}Consider installing Node.js 20+ or bun for full compatibility${RESET}"
     fi
   fi
 
@@ -535,6 +545,17 @@ configure_claude_hud_all_features() {
   if [[ -z "$runtime_path" ]]; then
     echo -e "${YELLOW}⚠ No runtime found (bun/node), skipping HUD config${RESET}"
     return 0
+  fi
+
+  # Check Node.js version (bun handles this internally, but node needs >=20 for fs/promises.constants)
+  if [[ "$runtime_path" == *"node" ]]; then
+    local runtime_version
+    runtime_version=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1)
+    if [[ -n "$runtime_version" && "$runtime_version" -lt 20 ]]; then
+      echo -e "${YELLOW}⚠ Node.js v${runtime_version} is too old for Claude-hud (requires >=20)${RESET}"
+      echo -e "  ${DIM}Install bun for better compatibility: curl -fsSL https://bun.sh/install | bash${RESET}"
+      return 0
+    fi
   fi
 
   # Find the latest claude-hud version directory
