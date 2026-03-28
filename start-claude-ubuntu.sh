@@ -416,19 +416,38 @@ check_dependencies() {
     fi
   fi
 
-  # Offer to install optional bun if missing or node version is old
-  if [[ ${#missing_optional[@]} -gt 0 ]] || [[ "$node_version" -lt 20 2>/dev/null ]]; then
+  # Offer to install bun OR upgrade Node.js if version is too old
+  if [[ ${#missing_optional[@]} -gt 0 ]] || [[ -n "$node_version" && "$node_version" -lt 20 ]]; then
     echo ""
-    echo -e "${DIM}Note: bun is recommended for Claude-HUD (Node.js <20 has compatibility issues)${RESET}"
-    read -rp "  Install bun now? [y/N]: " install_bun
-    echo ""
+    if [[ -n "$node_version" && "$node_version" -lt 20 ]]; then
+      echo -e "${YELLOW}⚠ Node.js v${node_version} is too old for Claude-HUD (requires >=20)${RESET}"
+      print_menu "Upgrade Node.js?" \
+        "Install Node.js 20 LTS" \
+        "Install bun instead (recommended)" \
+        "Skip HUD configuration"
+      node_upgrade=$(pick "Upgrade" 3 "1")
+      echo ""
 
-    if [[ "$install_bun" =~ ^[Yy]$ ]]; then
-      echo -e "  ${CYAN}Installing bun...${RESET}"
-      curl -fsSL https://bun.sh/install | bash || echo -e "  ${RED}Failed to install bun${RESET}"
-    elif [[ -n "$node_version" && "$node_version" -lt 20 ]]; then
-      echo -e "${YELLOW}⚠ Node.js v${node_version} may not work with Claude-HUD${RESET}"
-      echo -e "  ${DIM}Consider installing Node.js 20+ or bun for full compatibility${RESET}"
+      if [[ "$node_upgrade" == "1" ]]; then
+        echo -e "  ${CYAN}Installing Node.js 20 LTS...${RESET}"
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs 2>/dev/null || \
+        echo -e "  ${RED}Failed to install Node.js 20${RESET}"
+      elif [[ "$node_upgrade" == "2" ]]; then
+        echo -e "  ${CYAN}Installing bun...${RESET}"
+        curl -fsSL https://bun.sh/install | bash || echo -e "  ${RED}Failed to install bun${RESET}"
+      else
+        echo -e "${DIM}Skipping HUD configuration.${RESET}"
+        return 0
+      fi
+    else
+      echo -e "${DIM}Note: bun is recommended for Claude-HUD${RESET}"
+      read -rp "  Install bun now? [y/N]: " install_bun
+      echo ""
+
+      if [[ "$install_bun" =~ ^[Yy]$ ]]; then
+        echo -e "  ${CYAN}Installing bun...${RESET}"
+        curl -fsSL https://bun.sh/install | bash || echo -e "  ${RED}Failed to install bun${RESET}"
+      fi
     fi
   fi
 
