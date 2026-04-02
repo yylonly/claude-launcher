@@ -365,8 +365,8 @@ check_dependencies() {
       for dep in "${missing_deps[@]}"; do
         echo -e "  ${CYAN}Installing $dep...${RESET}"
         if [[ "$dep" == "claude" ]]; then
-          echo '  Follow the official guide: https://claude.ai/code'
-          echo '  Or run: curl -sSL https://claude.ai/install.sh | bash'
+          echo '  Installing claude via official installer...'
+          curl -sSL https://claude.ai/install.sh | bash
         elif [[ "$dep" == "python3" ]]; then
           brew install python3 || echo -e "  ${RED}Failed to install python3${RESET}"
         else
