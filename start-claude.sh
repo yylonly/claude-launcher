@@ -366,7 +366,21 @@ check_dependencies() {
         echo -e "  ${CYAN}Installing $dep...${RESET}"
         if [[ "$dep" == "claude" ]]; then
           echo '  Installing claude via official installer...'
-          curl -sSL https://claude.ai/install.sh | bash
+          local install_script
+          install_script=$(curl -sSL https://claude.ai/install.sh) || true
+          if [[ "$install_script" == \<!* ]]; then
+            # Received HTML (region blocked or error page) — try npm fallback
+            echo -e "  ${YELLOW}Official installer not available, trying npm...${RESET}"
+            if command -v npm &>/dev/null; then
+              npm install -g @anthropic-ai/claude-code || echo -e "  ${RED}npm install also failed${RESET}"
+            else
+              echo -e "  ${RED}npm not found either — please install Node.js first${RESET}"
+              echo -e "  ${YELLOW}Manual install: https://claude.ai/code${RESET}"
+              exit 1
+            fi
+          else
+            echo "$install_script" | bash
+          fi
         elif [[ "$dep" == "python3" ]]; then
           brew install python3 || echo -e "  ${RED}Failed to install python3${RESET}"
         else
