@@ -325,9 +325,9 @@ check_dependencies() {
     fi
   done
 
-  # Optional: bun or node (needed for Claude-HUD) - checked first
+  # node (needed for npm-based claude install fallback, and for Claude-HUD)
   if ! command -v bun &>/dev/null && ! command -v node &>/dev/null; then
-    missing_optional+=("bun")
+    missing_deps+=("node")
   fi
 
   # Claude Code (required)
@@ -344,7 +344,7 @@ check_dependencies() {
   elif command -v node &>/dev/null; then
     echo -e "  ${GREEN}✓${RESET} node: $(node --version)"
   else
-    echo -e "  ${DIM}○${RESET} bun/node: not installed (optional, for Claude-HUD)"
+    echo -e "  ${YELLOW}✗${RESET} node: not installed (needed for Claude-HUD)"
   fi
   if command -v claude &>/dev/null; then
     echo -e "  ${GREEN}✓${RESET} claude: installed"
@@ -362,7 +362,10 @@ check_dependencies() {
 
     if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
       for dep in "${missing_deps[@]}"; do
+        echo ""
         echo -e "  ${CYAN}Installing $dep...${RESET}"
+        local install_failed=false
+
         if [[ "$dep" == "claude" ]]; then
           echo '  Installing claude via official installer...'
           local install_script
@@ -371,54 +374,34 @@ check_dependencies() {
             # Received HTML (region blocked or error page) — try npm fallback
             echo -e "  ${YELLOW}Official installer not available, trying npm...${RESET}"
             if command -v npm &>/dev/null; then
-              npm install -g @anthropic-ai/claude-code || echo -e "  ${RED}npm install also failed${RESET}"
+              npm install -g @anthropic-ai/claude-code 2>&1 || install_failed=true
             else
-              echo -e "  ${RED}npm not found either — please install Node.js first${RESET}"
-              echo -e "  ${YELLOW}Manual install: https://claude.ai/code${RESET}"
-              exit 1
+              echo -e "  ${RED}npm not found — cannot install claude${RESET}"
+              install_failed=true
             fi
           else
-            echo "$install_script" | bash
+            echo "$install_script" | bash 2>&1 || install_failed=true
           fi
         elif [[ "$dep" == "python3" ]]; then
-          brew install python3 || echo -e "  ${RED}Failed to install python3${RESET}"
+          brew install python3 2>&1 || install_failed=true
+        elif [[ "$dep" == "node" ]]; then
+          brew install node 2>&1 || install_failed=true
         else
-          brew install "$dep" || echo -e "  ${RED}Failed to install $dep${RESET}"
+          brew install "$dep" 2>&1 || install_failed=true
         fi
-      done
 
-      # Re-check after installation
-      echo ""
-      echo -e "${CYAN}Re-checking dependencies...${RESET}"
-      local still_missing=()
-      for dep in "${missing_deps[@]}"; do
+        # Check if this dependency is now available
         if ! command -v "$dep" &>/dev/null; then
-          still_missing+=("$dep")
+          echo ""
+          echo -e "  ${RED}Failed to install $dep${RESET}"
+          echo "  Please install manually and run again."
+          exit 1
         fi
+        echo -e "  ${GREEN}✓ $dep installed${RESET}"
       done
-
-      if [[ ${#still_missing[@]} -gt 0 ]]; then
-        echo ""
-        echo -e "${RED}Still missing:${RESET} ${still_missing[*]}"
-        echo "Please install manually and run again."
-        exit 1
-      fi
     else
       echo "Cannot proceed without required dependencies."
       exit 1
-    fi
-  fi
-
-  # Offer to install optional bun if missing
-  if [[ ${#missing_optional[@]} -gt 0 ]]; then
-    echo ""
-    echo -e "${DIM}Note: bun is optional but recommended for Claude-HUD${RESET}"
-    read -rp "  Install bun now? [y/N]: " install_bun
-    echo ""
-
-    if [[ "$install_bun" =~ ^[Yy]$ ]]; then
-      echo -e "  ${CYAN}Installing bun...${RESET}"
-      curl -fsSL https://bun.sh/install | bash || echo -e "  ${RED}Failed to install bun${RESET}"
     fi
   fi
 
