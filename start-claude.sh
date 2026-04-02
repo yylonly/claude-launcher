@@ -325,32 +325,31 @@ check_dependencies() {
     fi
   done
 
+  # Optional: bun or node (needed for Claude-HUD) - checked first
+  if ! command -v bun &>/dev/null && ! command -v node &>/dev/null; then
+    missing_optional+=("bun")
+  fi
+
   # Claude Code (required)
   if ! command -v claude &>/dev/null; then
     missing_deps+=("claude")
-  fi
-
-  # Optional: bun or node (needed for Claude-HUD)
-  if ! command -v bun &>/dev/null && ! command -v node &>/dev/null; then
-    missing_optional+=("bun")
   fi
 
   # Report status
   echo -e "  ${GREEN}✓${RESET} bash: $(bash --version | head -1)"
   echo -e "  ${GREEN}✓${RESET} curl: $(curl --version | head -1 | awk '{print $1, $2}')"
   echo -e "  ${GREEN}✓${RESET} python3: $(python3 --version)"
-  if command -v claude &>/dev/null; then
-    echo -e "  ${GREEN}✓${RESET} claude: installed"
-  else
-    echo -e "  ${YELLOW}✗${RESET} claude: not installed"
-  fi
-
   if command -v bun &>/dev/null; then
     echo -e "  ${GREEN}✓${RESET} bun: $(bun --version)"
   elif command -v node &>/dev/null; then
     echo -e "  ${GREEN}✓${RESET} node: $(node --version)"
   else
     echo -e "  ${DIM}○${RESET} bun/node: not installed (optional, for Claude-HUD)"
+  fi
+  if command -v claude &>/dev/null; then
+    echo -e "  ${GREEN}✓${RESET} claude: installed"
+  else
+    echo -e "  ${YELLOW}✗${RESET} claude: not installed"
   fi
 
   # Install missing required dependencies
