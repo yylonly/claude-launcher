@@ -10,7 +10,7 @@ if [[ ! -t 0 ]]; then
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.6"
+VERSION="1.2.7"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -76,18 +76,35 @@ write_minimax_settings() {
   local api_key="$1"
   local model="$2"
   local agent_teams="${3:-}"
+  local auto_compact="${4:-1}"
   mkdir -p "${HOME}/.claude"
   # Backup original settings once
   if [[ -f "$CLAUDE_SETTINGS" && ! -f "$CLAUDE_SETTINGS_BAK" ]]; then
     cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS_BAK"
   fi
 
-  # Build env JSON
+  # Build env JSON — map auto_compact choice to percentage value
+  # 1=default(95%/off), 2=off, 3=80%, 4=60%, 5=40%
+  local ac_pct=""
+  if [[ "$auto_compact" == "2" ]]; then ac_pct="70"
+  elif [[ "$auto_compact" == "3" ]]; then ac_pct="50"
+  elif [[ "$auto_compact" == "4" ]]; then ac_pct="30"
+  fi
+
+  local base_env="\"ANTHROPIC_BASE_URL\": \"https://api.minimaxi.com/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\""
   local env_json
   if [[ "$agent_teams" == "1" ]]; then
-    env_json="{\"ANTHROPIC_BASE_URL\": \"https://api.minimaxi.com/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\"}"
+    if [[ -n "$ac_pct" ]]; then
+      env_json="{${base_env}, \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\": \"1\", \"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE\": \"${ac_pct}\"}"
+    else
+      env_json="{${base_env}, \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\": \"1\"}"
+    fi
   else
-    env_json="{\"ANTHROPIC_BASE_URL\": \"https://api.minimaxi.com/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\"}"
+    if [[ -n "$ac_pct" ]]; then
+      env_json="{${base_env}, \"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE\": \"${ac_pct}\"}"
+    else
+      env_json="{${base_env}}"
+    fi
   fi
 
   # Merge with existing settings using python (preserve other config)
@@ -138,18 +155,35 @@ write_bailian_settings() {
   local api_key="$1"
   local model="$2"
   local agent_teams="${3:-}"
+  local auto_compact="${4:-1}"
   mkdir -p "${HOME}/.claude"
   # Backup original settings once
   if [[ -f "$CLAUDE_SETTINGS" && ! -f "$CLAUDE_SETTINGS_BAK" ]]; then
     cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS_BAK"
   fi
 
-  # Build env JSON
+  # Build env JSON — map auto_compact choice to percentage value
+  # 1=default(95%/off), 2=off, 3=80%, 4=60%, 5=40%
+  local ac_pct=""
+  if [[ "$auto_compact" == "2" ]]; then ac_pct="70"
+  elif [[ "$auto_compact" == "3" ]]; then ac_pct="50"
+  elif [[ "$auto_compact" == "4" ]]; then ac_pct="30"
+  fi
+
+  local base_env="\"ANTHROPIC_BASE_URL\": \"https://coding.dashscope.aliyuncs.com/apps/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\""
   local env_json
   if [[ "$agent_teams" == "1" ]]; then
-    env_json="{\"ANTHROPIC_BASE_URL\": \"https://coding.dashscope.aliyuncs.com/apps/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\"}"
+    if [[ -n "$ac_pct" ]]; then
+      env_json="{${base_env}, \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\": \"1\", \"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE\": \"${ac_pct}\"}"
+    else
+      env_json="{${base_env}, \"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS\": \"1\"}"
+    fi
   else
-    env_json="{\"ANTHROPIC_BASE_URL\": \"https://coding.dashscope.aliyuncs.com/apps/anthropic\", \"ANTHROPIC_AUTH_TOKEN\": \"${api_key}\", \"API_TIMEOUT_MS\": \"3000000\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"ANTHROPIC_MODEL\": \"${model}\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_OPUS_MODEL\": \"${model}\", \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${model}\"}"
+    if [[ -n "$ac_pct" ]]; then
+      env_json="{${base_env}, \"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE\": \"${ac_pct}\"}"
+    else
+      env_json="{${base_env}}"
+    fi
   fi
 
   # Merge with existing settings using python (preserve other config)
@@ -194,6 +228,8 @@ load_defaults() {
   DEFAULT_MC_2=""
   DEFAULT_MC_3=""
   DEFAULT_AGENT_TEAMS="2"  # 1=yes, 2=no
+  DEFAULT_OPUS_1M="2"      # 1=enable 1M context [opus[1m]], 2=disable [opus]
+  DEFAULT_AUTOCOMPACT="1"  # 1=default(95%), 2=off, 3=80%, 4=60%, 5=40%
   DEFAULT_CLAUDE_HUD="1"   # 1=install, 2=skip
   DEFAULT_BRAVE_SEARCH="2" # 1=enable, 2=skip
   DEFAULT_TAVILY_SEARCH="2" # 1=enable, 2=skip
@@ -210,6 +246,8 @@ load_defaults() {
   DEFAULT_CLAUDE_HUD="${DEFAULT_CLAUDE_HUD:-1}"
   DEFAULT_BRAVE_SEARCH="${DEFAULT_BRAVE_SEARCH:-2}"
   DEFAULT_TAVILY_SEARCH="${DEFAULT_TAVILY_SEARCH:-2}"
+  DEFAULT_OPUS_1M="${DEFAULT_OPUS_1M:-2}"
+  DEFAULT_AUTOCOMPACT="${DEFAULT_AUTOCOMPACT:-1}"
   # Pre-populate env vars from saved keys if not already set
   if [[ -z "${MINIMAX_API_KEY:-}" && -n "$SAVED_MINIMAX_API_KEY" ]]; then export MINIMAX_API_KEY="$SAVED_MINIMAX_API_KEY"; fi
   if [[ -z "${DASHSCOPE_API_KEY:-}" && -n "$SAVED_DASHSCOPE_API_KEY" ]]; then export DASHSCOPE_API_KEY="$SAVED_DASHSCOPE_API_KEY"; fi
@@ -234,6 +272,8 @@ DEFAULT_MC_1=$DEFAULT_MC_1
 DEFAULT_MC_2=$DEFAULT_MC_2
 DEFAULT_MC_3=$DEFAULT_MC_3
 DEFAULT_AGENT_TEAMS=$AGENT_TEAMS_CHOICE
+DEFAULT_OPUS_1M=$OPUS_1M_CHOICE
+DEFAULT_AUTOCOMPACT=$AUTOCOMPACT_CHOICE
 DEFAULT_CLAUDE_HUD=$CLAUDE_HUD_CHOICE
 DEFAULT_BRAVE_SEARCH=$BRAVE_SEARCH_CHOICE
 DEFAULT_TAVILY_SEARCH=$TAVILY_SEARCH_CHOICE
@@ -795,6 +835,8 @@ PYEOF
 quick_launch() {
   PLAN_CHOICE="$DEFAULT_PLAN"
   AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"
+  OPUS_1M_CHOICE="${DEFAULT_OPUS_1M:-2}"
+  AUTOCOMPACT_CHOICE="${DEFAULT_AUTOCOMPACT:-1}"
   CLAUDE_HUD_CHOICE="${DEFAULT_CLAUDE_HUD:-1}"
   BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"
   TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}"
@@ -841,7 +883,7 @@ quick_launch() {
         *) SELECTED_MODEL="MiniMax-M2.7" ;;
       esac
 
-      write_minimax_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
+      write_minimax_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE" "$AUTOCOMPACT_CHOICE"
       ensure_onboarding
 
       EXTRA_ARGS+=(
@@ -875,7 +917,7 @@ quick_launch() {
         *) SELECTED_MODEL="qwen3-max-2026-01-23" ;;
       esac
 
-      write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
+      write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE" "$AUTOCOMPACT_CHOICE"
       ensure_onboarding
 
       EXTRA_ARGS+=(
@@ -920,12 +962,20 @@ quick_launch() {
   if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
     echo -e "  ${DIM}Agent   :${RESET} ${GREEN}Enabled${RESET}"
   fi
+  if [[ "$OPUS_1M_CHOICE" == "1" ]]; then
+    echo -e "  ${DIM}1M Ctx  :${RESET} ${GREEN}Enabled${RESET}"
+  fi
   echo ""
 
   # Save config including project directory for resume
   save_defaults
 
-  exec claude --model "opus[1m]" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
+  local opus_model="opus"
+  if [[ "$OPUS_1M_CHOICE" == "1" ]]; then
+    opus_model="opus[1m]"
+  fi
+
+  exec claude --model "$opus_model" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
 }
 
 # ─── Uninstall Subcommand ─────────────────────────────────────────────────────
@@ -1530,6 +1580,8 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
 
   # Apply saved provider settings (same as quick_launch but for resume)
   AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"
+  OPUS_1M_CHOICE="${DEFAULT_OPUS_1M:-2}"
+  AUTOCOMPACT_CHOICE="${DEFAULT_AUTOCOMPACT:-1}"
   BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"
   TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}"
 
@@ -1560,7 +1612,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
         6) SELECTED_MODEL="MiniMax-M2" ;;
         *) SELECTED_MODEL="MiniMax-M2.7" ;;
       esac
-      write_minimax_settings "$MINIMAX_API_KEY" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
+      write_minimax_settings "$MINIMAX_API_KEY" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE" "$AUTOCOMPACT_CHOICE"
       ensure_onboarding
       export ANTHROPIC_BASE_URL="https://api.minimaxi.com/anthropic"
       export ANTHROPIC_AUTH_TOKEN="$MINIMAX_API_KEY"
@@ -1592,7 +1644,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
         10) SELECTED_MODEL="qwq-plus" ;;
         *) SELECTED_MODEL="qwen3-max-2026-01-23" ;;
       esac
-      write_bailian_settings "$DASHSCOPE_API_KEY" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE"
+      write_bailian_settings "$DASHSCOPE_API_KEY" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE" "$AUTOCOMPACT_CHOICE"
       ensure_onboarding
       export ANTHROPIC_BASE_URL="https://coding.dashscope.aliyuncs.com/apps/anthropic"
       export ANTHROPIC_AUTH_TOKEN="$DASHSCOPE_API_KEY"
@@ -1613,9 +1665,17 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
   if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
     echo -e "  ${DIM}Agent   :${RESET} ${GREEN}Enabled${RESET}"
   fi
+  if [[ "$OPUS_1M_CHOICE" == "1" ]]; then
+    echo -e "  ${DIM}1M Ctx  :${RESET} ${GREEN}Enabled${RESET}"
+  fi
   echo ""
 
-  exec claude --model "opus[1m]" --permission-mode bypassPermissions "${RESUME_ARGS[@]}"
+  local opus_model="opus"
+  if [[ "$OPUS_1M_CHOICE" == "1" ]]; then
+    opus_model="opus[1m]"
+  fi
+
+  exec claude --model "$opus_model" --permission-mode bypassPermissions "${RESUME_ARGS[@]}"
 fi
 
 # Quick launch if no conf mode
@@ -1646,6 +1706,8 @@ BASE_URL=""
 API_KEY_VAR=""
 EXTRA_ARGS=()
 AGENT_TEAMS_CHOICE="${DEFAULT_AGENT_TEAMS:-2}"  # Default to disabled
+OPUS_1M_CHOICE="${DEFAULT_OPUS_1M:-2}"        # Default to disabled
+AUTOCOMPACT_CHOICE="${DEFAULT_AUTOCOMPACT:-1}"   # Default to auto-compact default
 BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"  # Default to disabled
 TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}" # Default to disabled
 
@@ -1709,7 +1771,17 @@ case "$PLAN_CHOICE" in
       6) SELECTED_MODEL="MiniMax-M2" ;;
     esac
 
-    write_minimax_settings "${MINIMAX_API_KEY}" "${SELECTED_MODEL}" "${AGENT_TEAMS_CHOICE}"
+    # Auto-Compact menu for MiniMaxi and Bailian
+    echo ""
+    print_menu "Auto-Compact Context?" \
+      "Default (95%)  — Trigger at 95% context (system default)" \
+      "70%           — Compact at 70% context" \
+      "50%           — Compact at 50% context" \
+      "30%           — Compact at 30% context" \
+      "Off           — Disable auto-compact"
+    AUTOCOMPACT_CHOICE=$(pick "Auto-Compact" 5 "$DEFAULT_AUTOCOMPACT")
+
+    write_minimax_settings "${MINIMAX_API_KEY}" "${SELECTED_MODEL}" "${AGENT_TEAMS_CHOICE}" "$AUTOCOMPACT_CHOICE"
     ensure_onboarding
 
     EXTRA_ARGS+=(
@@ -1761,8 +1833,18 @@ case "$PLAN_CHOICE" in
       10) SELECTED_MODEL="qwq-plus" ;;
     esac
 
+    # Auto-Compact menu for MiniMaxi and Bailian
+    echo ""
+    print_menu "Auto-Compact Context?" \
+      "Default (95%)  — Trigger at 95% context (system default)" \
+      "70%           — Compact at 70% context" \
+      "50%           — Compact at 50% context" \
+      "30%           — Compact at 30% context" \
+      "Off           — Disable auto-compact"
+    AUTOCOMPACT_CHOICE=$(pick "Auto-Compact" 5 "$DEFAULT_AUTOCOMPACT")
+
     # Write Bailian settings for Claude Code (after model is selected)
-    write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "${AGENT_TEAMS_CHOICE}"
+    write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "${AGENT_TEAMS_CHOICE}" "$AUTOCOMPACT_CHOICE"
     ensure_onboarding
 
     EXTRA_ARGS+=(
@@ -1778,7 +1860,14 @@ print_menu "Enable Agent Teams?" \
   "[No]  Disable (default)   — Standard single session"
 AGENT_TEAMS_CHOICE=$(pick "Agent Teams" 2 "$DEFAULT_AGENT_TEAMS")
 
-# ─── Step 2.6 — Claude-HUD Option ─────────────────────────────────────────────
+# ─── Step 2.6 — 1M Context Option ────────────────────────────────────────────
+echo ""
+print_menu "Enable 1M Context (Opus 1M)?" \
+  "[Yes] Enable 1M Context — Use --model opus[1m] for 1 million token context" \
+  "[No]  Disable          — Use --model opus for standard context"
+OPUS_1M_CHOICE=$(pick "1M Context" 2 "$DEFAULT_OPUS_1M")
+
+# ─── Step 2.7 — Claude-HUD Option ─────────────────────────────────────────────
 echo ""
 print_menu "Install Claude-HUD?" \
   "[Yes] Install (default)   — Install claude-hud plugin with all features" \
@@ -1790,7 +1879,7 @@ if [[ "$CLAUDE_HUD_CHOICE" == "1" ]]; then
   check_claude_hud
 fi
 
-# ─── Step 2.7 — Brave Search MCP Option ────────────────────────────────────────
+# ─── Step 2.8 — Brave Search MCP Option ────────────────────────────────────────
 echo ""
 print_menu "Install Brave Search MCP?" \
   "[Yes] Enable  — Enable Brave Search (requires API key, needs VPN)" \
@@ -1827,7 +1916,7 @@ if [[ "$BRAVE_SEARCH_CHOICE" == "1" ]]; then
   fi
 fi
 
-# ─── Step 2.8 — Tavily Search MCP Option ────────────────────────────────────────
+# ─── Step 2.9 — Tavily Search MCP Option ────────────────────────────────────────
 echo ""
 print_menu "Install Tavily Search MCP?" \
   "[Yes] Enable  — Enable Tavily Search for web search (requires API key)" \
@@ -1911,6 +2000,14 @@ echo -e "  ${DIM}Model   :${RESET} ${BLUE}${SELECTED_MODEL}${RESET}"
 if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
   echo -e "  ${DIM}Agent   :${RESET} ${GREEN}Enabled${RESET}"
 fi
+if [[ "$OPUS_1M_CHOICE" == "1" ]]; then
+  echo -e "  ${DIM}1M Ctx  :${RESET} ${GREEN}Enabled${RESET}"
+fi
 echo ""
 
-exec claude --model "opus[1m]" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
+opus_model="opus"
+if [[ "$OPUS_1M_CHOICE" == "1" ]]; then
+  opus_model="opus[1m]"
+fi
+
+exec claude --model "$opus_model" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
