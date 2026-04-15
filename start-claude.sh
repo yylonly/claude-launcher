@@ -1670,7 +1670,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
   fi
   echo ""
 
-  local opus_model="opus"
+  opus_model="opus"
   if [[ "$OPUS_1M_CHOICE" == "1" ]]; then
     opus_model="opus[1m]"
   fi
