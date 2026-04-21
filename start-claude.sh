@@ -10,7 +10,7 @@ if [[ ! -t 0 ]]; then
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.7"
+VERSION="1.2.8"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -506,13 +506,30 @@ check_claude_code() {
       exit 1
     fi
   else
-    # Claude is installed, show version
+    # Claude is installed, check version and update if needed
     local current_version
     current_version=$(claude --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[[0-9]+(\.[0-9]+)?' | head -n1 || echo "unknown")
 
     echo -e "  ${DIM}Current version:${RESET} ${current_version}"
     echo ""
-    echo -e "  ${DIM}Tip: Run ${GREEN}claude update${DIM} to update Claude Code${RESET}"
+
+    # Detect if claude was installed via brew
+    local brew_installed=false
+    if [[ -f "/opt/homebrew/bin/claude" ]] && [[ "$(readlink -f /opt/homebrew/bin/claude 2>/dev/null)" == *"Caskroom/claude-code"* ]] || \
+       [[ -f "/usr/local/bin/claude" ]] && [[ "$(readlink -f /usr/local/bin/claude 2>/dev/null)" == *"Caskroom/claude-code"* ]]; then
+      brew_installed=true
+    fi
+
+    # Auto-update Claude Code if newer version available
+    echo -e "${CYAN}Checking for Claude Code updates...${RESET}"
+    local update_output
+    update_output=$(claude update 2>&1)
+    if echo "$update_output" | grep -q "Homebrew"; then
+      echo "  (Claude is managed by Homebrew, using brew upgrade)"
+      brew upgrade claude-code 2>&1 | sed 's/^/  /' || true
+    else
+      echo "$update_output" | sed 's/^/  /'
+    fi
     echo ""
   fi
 
