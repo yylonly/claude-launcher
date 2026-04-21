@@ -40,6 +40,24 @@ CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
 CLAUDE_SETTINGS_BAK="${HOME}/.claude/settings.json.launcher-bak"
 CLAUDE_JSON="${HOME}/.claude.json"
 
+# ─── Ensure ~/.local/bin is in PATH via ~/.zshrc ─────────────────────────────
+ensure_local_bin_in_path() {
+    if grep -q '\.local/bin' "$HOME/.zshrc" 2>/dev/null; then
+        return
+    fi
+    echo ""
+    echo -e "${YELLOW}~/.local/bin is not in your PATH.${RESET}"
+    echo "  This is needed for Claude Code and other tools."
+    echo ""
+    read -rp "  Add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to ~/.zshrc? [Y/n]: " add_path
+    echo ""
+    if [[ -z "$add_path" || "$add_path" =~ ^[Yy]$ ]]; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+        echo -e "${GREEN}✓ Added to ~/.zshrc${RESET}"
+        echo "  Restart your shell or run: source ~/.zshrc"
+    fi
+}
+
 # ─── Auto-update function ───────────────────────────────────────────────────
 check_update() {
     echo -e "${CYAN}Checking for updates...${RESET}"
@@ -66,6 +84,7 @@ check_update() {
                 if [[ "$SCRIPT_PATH" == /usr/local/bin/* || "$SCRIPT_PATH" == /usr/bin/* ]]; then
                     sudo mv "$tmp_file" "$SCRIPT_PATH" 2>/dev/null && {
                         echo -e "${GREEN}✓ Updated successfully!${RESET}"
+                        ensure_local_bin_in_path
                         echo "Please run again."
                         exit 0
                     } || {
@@ -76,6 +95,7 @@ check_update() {
                     }
                 elif mv "$tmp_file" "$SCRIPT_PATH"; then
                     echo -e "${GREEN}✓ Updated successfully!${RESET}"
+                    ensure_local_bin_in_path
                     echo "Please run again."
                     exit 0
                 else
