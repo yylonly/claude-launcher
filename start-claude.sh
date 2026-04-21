@@ -61,14 +61,28 @@ check_update() {
             echo -e "${CYAN}Updating...${RESET}"
             local tmp_file
             tmp_file=$(mktemp)
-            if curl -sSL "$UPDATE_URL" -o "$tmp_file" && chmod +x "$tmp_file" && mv "$tmp_file" "$SCRIPT_PATH"; then
-                echo -e "${GREEN}✓ Updated successfully!${RESET}"
-                echo "Please run again."
-                exit 0
-            else
-                rm -f "$tmp_file"
-                echo -e "${RED}Update failed.${RESET}"
-                return 1
+            if curl -sSL "$UPDATE_URL" -o "$tmp_file" && chmod +x "$tmp_file"; then
+                # Use sudo if script is in a system directory (e.g. /usr/local/bin)
+                if [[ "$SCRIPT_PATH" == /usr/local/bin/* || "$SCRIPT_PATH" == /usr/bin/* ]]; then
+                    sudo mv "$tmp_file" "$SCRIPT_PATH" 2>/dev/null && {
+                        echo -e "${GREEN}✓ Updated successfully!${RESET}"
+                        echo "Please run again."
+                        exit 0
+                    } || {
+                        rm -f "$tmp_file"
+                        echo -e "${RED}Update failed (permission denied).${RESET}"
+                        echo "Try: sudo cli -u"
+                        return 1
+                    }
+                elif mv "$tmp_file" "$SCRIPT_PATH"; then
+                    echo -e "${GREEN}✓ Updated successfully!${RESET}"
+                    echo "Please run again."
+                    exit 0
+                else
+                    rm -f "$tmp_file"
+                    echo -e "${RED}Update failed.${RESET}"
+                    return 1
+                fi
             fi
         fi
     else
