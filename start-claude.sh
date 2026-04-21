@@ -56,11 +56,14 @@ check_update() {
         read -rp "  Update now? [y/N]: " update_choice
         if [[ "$update_choice" =~ ^[Yy]$ ]]; then
             echo -e "${CYAN}Updating...${RESET}"
-            if curl -sSL "$UPDATE_URL" -o "$SCRIPT_PATH" && chmod +x "$SCRIPT_PATH"; then
+            local tmp_file
+            tmp_file=$(mktemp)
+            if curl -sSL "$UPDATE_URL" -o "$tmp_file" && chmod +x "$tmp_file" && mv "$tmp_file" "$SCRIPT_PATH"; then
                 echo -e "${GREEN}✓ Updated successfully!${RESET}"
                 echo "Please run again."
                 exit 0
             else
+                rm -f "$tmp_file"
                 echo -e "${RED}Update failed.${RESET}"
                 return 1
             fi
