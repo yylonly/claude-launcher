@@ -4,13 +4,16 @@
 
 set -euo pipefail
 
+# ─── Ensure ~/.local/bin and ~/bin are on PATH ─────────────────────────────
+export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+
 # ─── Re-run with PTY if stdin is not a terminal ─────────────────────────────
 if [[ ! -t 0 ]]; then
   exec script -q /dev/null "$0" "$@"
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.8"
+VERSION="1.2.9"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -451,6 +454,74 @@ check_dependencies() {
   echo ""
 }
 
+# ─── Switch from Homebrew to official native version ─────────────────────────
+switch_to_native_claude() {
+  echo -e "${CYAN}Switching to official native Claude Code...${RESET}"
+  echo ""
+
+  # Detect Homebrew binary paths
+  local brew_paths=("/opt/homebrew/bin/claude" "/usr/local/bin/claude")
+  local removed=false
+
+  for bp in "${brew_paths[@]}"; do
+    if [[ -f "$bp" ]]; then
+      local real_path
+      real_path=$(readlink -f "$bp" 2>/dev/null || echo "$bp")
+      if [[ "$real_path" == *"Caskroom/claude-code"* ]] || [[ "$real_path" == *"Homebrew"* ]]; then
+        echo "  Removing Homebrew-installed Claude at: $bp"
+        brew uninstall claude-code 2>&1 | sed 's/^/  /' || true
+        removed=true
+        break
+      fi
+    fi
+  done
+
+  if [[ "$removed" == "false" ]]; then
+    echo "  (Could not find Homebrew-installed claude binary, trying to remove manually)"
+    rm -f /opt/homebrew/bin/claude /usr/local/bin/claude 2>/dev/null || true
+    rm -f /opt/homebrew/bin/claude-code /usr/local/bin/claude-code 2>/dev/null || true
+  fi
+
+  echo ""
+  echo -e "${CYAN}Installing official native Claude Code...${RESET}"
+  if curl -sSL https://claude.ai/install.sh | bash 2>&1; then
+    echo ""
+    echo -e "${GREEN}✓ Switched to official native version successfully!${RESET}"
+
+    # Refresh PATH for this script - official native installs to ~/.local/bin or ~/bin
+    export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:$PATH"
+    source ~/.zshrc 2>/dev/null || true
+
+    # Verify claude is now reachable
+    if ! command -v claude &>/dev/null; then
+      echo -e "${YELLOW}  Warning: claude not in PATH, searching...${RESET}"
+      local claude_path
+      for p in "$HOME/.local/bin/claude" "$HOME/bin/claude" "/usr/local/bin/claude"; do
+        if [[ -f "$p" ]]; then
+          claude_path="$p"
+          break
+        fi
+      done
+      if [[ -n "$claude_path" ]]; then
+        export PATH="$(dirname "$claude_path"):$PATH"
+      else
+        echo -e "${RED}  Error: cannot find claude binary after install${RESET}"
+      fi
+    fi
+
+    local new_ver
+    new_ver=$(claude --version 2>/dev/null | head -n1 || echo "")
+    if [[ -n "$new_ver" ]]; then
+      echo "  Version: $new_ver"
+    fi
+  else
+    echo ""
+    echo -e "${RED}Failed to install official native version.${RESET}"
+    echo "  Please try manually: curl -sSL https://claude.ai/install.sh | bash"
+  fi
+  echo ""
+}
+
 # ─── Claude Code installation check ──────────────────────────────────────────
 check_claude_code() {
   echo -e "${CYAN}${BOLD}  Checking Claude Code installation...${RESET}"
@@ -530,6 +601,26 @@ check_claude_code() {
     if echo "$update_output" | grep -q "Homebrew"; then
       echo "  (Claude is managed by Homebrew, using brew upgrade)"
       brew upgrade claude-code 2>&1 | sed 's/^/  /' || true
+
+      # Check if brew upgrade gave us the latest version
+      local new_version
+      new_version=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo "")
+      local latest_version
+      latest_version=$(curl -sSL "https://api.github.com/repos/anthropics/claude-code/releases/latest" 2>/dev/null | grep '"tag_name"' | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | sed 's/^v//' || echo "")
+
+      if [[ -n "$latest_version" && -n "$new_version" && "$new_version" != "$latest_version" ]]; then
+        echo ""
+        echo -e "${YELLOW}Homebrew is behind!${RESET} Latest: v${latest_version}, Installed: v${new_version}"
+        echo ""
+        echo "  1) Keep Homebrew version (v${new_version})"
+        echo "  2) Switch to official native version (v${latest_version}) - ${GREEN}recommended${RESET}"
+        echo ""
+        read -rp "  Choice [2]: " switch_choice
+        echo ""
+        if [[ -z "$switch_choice" || "$switch_choice" == "2" ]]; then
+          switch_to_native_claude
+        fi
+      fi
     else
       echo "$update_output" | sed 's/^/  /'
     fi
