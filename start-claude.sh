@@ -12,8 +12,13 @@ if [[ ! -t 0 ]]; then
   exec script -q /dev/null "$0" "$@"
 fi
 
+# ─── Run inside tmux if not already in a tmux session ─────────────────────
+if [[ -z "${TMUX:-}" ]]; then
+  exec tmux new-session -A -s claude "$0" "$@"
+fi
+
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.9"
+VERSION="1.2.10"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 if [[ -L "$SCRIPT_PATH" ]]; then
@@ -273,6 +278,7 @@ load_defaults() {
   DEFAULT_CLAUDE_HUD="1"   # 1=install, 2=skip
   DEFAULT_BRAVE_SEARCH="2" # 1=enable, 2=skip
   DEFAULT_TAVILY_SEARCH="2" # 1=enable, 2=skip
+  DEFAULT_MINIMAX_CLI="2"  # 1=install, 2=skip
   SAVED_MINIMAX_API_KEY=""
   SAVED_DASHSCOPE_API_KEY=""
   SAVED_BRAVE_API_KEY=""
@@ -286,6 +292,7 @@ load_defaults() {
   DEFAULT_CLAUDE_HUD="${DEFAULT_CLAUDE_HUD:-1}"
   DEFAULT_BRAVE_SEARCH="${DEFAULT_BRAVE_SEARCH:-2}"
   DEFAULT_TAVILY_SEARCH="${DEFAULT_TAVILY_SEARCH:-2}"
+  DEFAULT_MINIMAX_CLI="${DEFAULT_MINIMAX_CLI:-2}"
   DEFAULT_OPUS_1M="${DEFAULT_OPUS_1M:-2}"
   DEFAULT_AUTOCOMPACT="${DEFAULT_AUTOCOMPACT:-1}"
   # Pre-populate env vars from saved keys if not already set
@@ -317,6 +324,7 @@ DEFAULT_AUTOCOMPACT=$AUTOCOMPACT_CHOICE
 DEFAULT_CLAUDE_HUD=$CLAUDE_HUD_CHOICE
 DEFAULT_BRAVE_SEARCH=$BRAVE_SEARCH_CHOICE
 DEFAULT_TAVILY_SEARCH=$TAVILY_SEARCH_CHOICE
+DEFAULT_MINIMAX_CLI=$MINIMAX_CLI_CHOICE
 SAVED_MINIMAX_API_KEY="${MINIMAX_API_KEY:-}"
 SAVED_DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}"
 SAVED_BRAVE_API_KEY="${BRAVE_API_KEY:-}"
@@ -629,9 +637,13 @@ check_claude_code() {
     fi
 
     # Auto-update Claude Code if newer version available
-    echo -e "${CYAN}Checking for Claude Code updates...${RESET}"
-    local update_output
-    update_output=$(claude update 2>&1)
+    echo -e "  ${CYAN}Checking for Claude Code updates...${RESET} (Press Enter to skip)"
+    claude update >/tmp/claude_update_output.txt 2>&1 &
+    local pid=$!
+    # Wait for Enter (skip) or 15 second timeout
+    read -t 15 -r && kill $pid 2>/dev/null && echo -e "${DIM}  (skipped)${RESET}"
+    wait $pid 2>/dev/null || true
+    local update_output=$(cat /tmp/claude_update_output.txt 2>/dev/null)
     if echo "$update_output" | grep -q "Homebrew"; then
       echo "  (Claude is managed by Homebrew, using brew upgrade)"
       brew upgrade claude-code 2>&1 | sed 's/^/  /' || true
@@ -985,6 +997,7 @@ quick_launch() {
   CLAUDE_HUD_CHOICE="${DEFAULT_CLAUDE_HUD:-1}"
   BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"
   TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}"
+  MINIMAX_CLI_CHOICE="${DEFAULT_MINIMAX_CLI:-2}"
 
   # Save current directory for resume
   LAST_PROJECT_DIR="$(pwd)"
@@ -1729,6 +1742,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
   AUTOCOMPACT_CHOICE="${DEFAULT_AUTOCOMPACT:-1}"
   BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"
   TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}"
+  MINIMAX_CLI_CHOICE="${DEFAULT_MINIMAX_CLI:-2}"
 
   case "$DEFAULT_PLAN" in
     1)  # Anthropic
@@ -1855,6 +1869,7 @@ OPUS_1M_CHOICE="${DEFAULT_OPUS_1M:-2}"        # Default to disabled
 AUTOCOMPACT_CHOICE="${DEFAULT_AUTOCOMPACT:-1}"   # Default to auto-compact default
 BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"  # Default to disabled
 TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}" # Default to disabled
+MINIMAX_CLI_CHOICE="${DEFAULT_MINIMAX_CLI:-2}"  # Default to disabled
 
 case "$PLAN_CHOICE" in
 
@@ -2005,14 +2020,7 @@ print_menu "Enable Agent Teams?" \
   "[No]  Disable (default)   — Standard single session"
 AGENT_TEAMS_CHOICE=$(pick "Agent Teams" 2 "$DEFAULT_AGENT_TEAMS")
 
-# ─── Step 2.6 — 1M Context Option ────────────────────────────────────────────
-echo ""
-print_menu "Enable 1M Context (Opus 1M)?" \
-  "[Yes] Enable 1M Context — Use --model opus[1m] for 1 million token context" \
-  "[No]  Disable          — Use --model opus for standard context"
-OPUS_1M_CHOICE=$(pick "1M Context" 2 "$DEFAULT_OPUS_1M")
-
-# ─── Step 2.7 — Claude-HUD Option ─────────────────────────────────────────────
+# ─── Step 2.6 — Claude-HUD Option ─────────────────────────────────────────────
 echo ""
 print_menu "Install Claude-HUD?" \
   "[Yes] Install (default)   — Install claude-hud plugin with all features" \
@@ -2022,6 +2030,55 @@ CLAUDE_HUD_CHOICE=$(pick "Claude-HUD" 2 "$DEFAULT_CLAUDE_HUD")
 # Install or skip claude-hud based on user choice
 if [[ "$CLAUDE_HUD_CHOICE" == "1" ]]; then
   check_claude_hud
+fi
+
+# ─── Step 2.7 — MiniMax CLI Option ──────────────────────────────────────────────
+echo ""
+print_menu "Install MiniMax CLI (mmx)?" \
+  "[Yes] Install  — Install mmx-cli for token management and CLI access" \
+  "[No]  Skip     — Do not install mmx-cli"
+MINIMAX_CLI_CHOICE=$(pick "MiniMax CLI" 2 "2")
+
+if [[ "$MINIMAX_CLI_CHOICE" == "1" ]]; then
+  echo -e "${CYAN}Installing MiniMax CLI...${RESET}"
+  install_mmx_success=false
+  if command -v npm &>/dev/null; then
+    if npm install -g mmx-cli 2>&1; then
+      echo -e "${GREEN}✓ MiniMax CLI installed successfully!${RESET}"
+      install_mmx_success=true
+    else
+      echo -e "${YELLOW}⚠ Failed to install mmx-cli via npm, trying bun...${RESET}"
+      if command -v bun &>/dev/null; then
+        if bun install -g mmx-cli 2>&1; then
+          echo -e "${GREEN}✓ MiniMax CLI installed via bun!${RESET}"
+          install_mmx_success=true
+        else
+          echo -e "${RED}✗ Failed to install mmx-cli${RESET}"
+        fi
+      else
+        echo -e "${RED}✗ npm failed and bun is not available${RESET}"
+      fi
+    fi
+  elif command -v bun &>/dev/null; then
+    if bun install -g mmx-cli 2>&1; then
+      echo -e "${GREEN}✓ MiniMax CLI installed via bun!${RESET}"
+      install_mmx_success=true
+    else
+      echo -e "${RED}✗ Failed to install mmx-cli${RESET}"
+    fi
+  else
+    echo -e "${RED}✗ npm or bun is required to install mmx-cli${RESET}"
+  fi
+
+  # Verify mmx auth if installed and API key is available
+  if [[ "$install_mmx_success" == "true" ]] && [[ -n "${MINIMAX_API_KEY:-}" ]]; then
+    echo ""
+    echo -e "${CYAN}Verifying Minimax API key with mmx...${RESET}"
+    if mmx auth login --api-key "$MINIMAX_API_KEY" 2>&1; then
+      echo ""
+    fi
+  fi
+  echo ""
 fi
 
 # ─── Step 2.8 — Brave Search MCP Option ────────────────────────────────────────
@@ -2061,7 +2118,7 @@ if [[ "$BRAVE_SEARCH_CHOICE" == "1" ]]; then
   fi
 fi
 
-# ─── Step 2.9 — Tavily Search MCP Option ────────────────────────────────────────
+# ─── Step 2.8 — Tavily Search MCP Option ────────────────────────────────────────
 echo ""
 print_menu "Install Tavily Search MCP?" \
   "[Yes] Enable  — Enable Tavily Search for web search (requires API key)" \
