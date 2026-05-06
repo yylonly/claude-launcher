@@ -10,26 +10,46 @@ set -eo pipefail
 # ─── Ensure ~/.local/bin and ~/bin are on PATH ─────────────────────────────
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 
-# ─── Re-run with PTY if stdin is not a terminal ─────────────────────────────
-# Detect if already inside script to avoid problematic nesting
-already_in_script=false
+# ─── Setup tmux configuration ───────────────────────────────────────────────
+setup_tmux_config() {
+  local tmux_conf="${HOME}/.tmux.conf.launcher"
+  cat > "$tmux_conf" <<'EOF'
+# Enable mouse support
+set -g mouse on
 
-# Check parent process name for script (avoid re-exec into nested script)
+# Better prefix key
+unbind C-b
+set -g prefix C-a
+bind C-a send-prefix
+
+# Status bar colors
+set -g status-bg colour237
+set -g status-fg colour250
+EOF
+  echo "$tmux_conf"
+}
+
+# ─── Re-run with PTY if stdin is not a terminal ─────────────────────────────
+# Detect if already inside tmux to avoid problematic nesting
+already_in_tmux=false
+
+# Check parent process name for tmux (avoid re-exec into nested tmux)
 if [[ -n "${PPID:-}" ]]; then
   parent_name=$(ps -p $PPID -o comm= 2>/dev/null || echo "")
-  if [[ "$parent_name" == *"script"* ]]; then
-    already_in_script=true
+  if [[ "$parent_name" == *"tmux"* ]]; then
+    already_in_tmux=true
   fi
 fi
 
 # Skip PTY re-exec if already in tmux (tmux provides its own PTY)
 # Also skip if TMUX is set (even if we can't detect parent name)
 if [[ -n "${TMUX:-}" ]]; then
-  already_in_script=true
+  already_in_tmux=true
 fi
 
-if [[ ! -t 0 ]] && [[ "$already_in_script" == "false" ]]; then
-  exec script -q /dev/null "$0" "$@"
+if [[ ! -t 0 ]] && [[ "$already_in_tmux" == "false" ]]; then
+  TMUX_CONF=$(setup_tmux_config)
+  exec tmux -f "$TMUX_CONF" new-session -A -s "claude-launcher" "$0" "$@"
 fi
 
 # ─── Load config ──────────────────────────────────────────────────────────────
@@ -1239,7 +1259,15 @@ quick_launch() {
     opus_model="opus[1m]"
   fi
 
-  exec claude --model "$opus_model" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
+  # Build the claude command - use printf %q to safely escape arguments
+  CLAUDE_CMD="claude --model $opus_model --permission-mode bypassPermissions $(printf '%q ' "${EXTRA_ARGS[@]}")"
+
+  # Setup tmux config
+  TMUX_CONF=$(setup_tmux_config)
+
+  # Launch in tmux session - create detached, then attach
+  tmux -f "$TMUX_CONF" new-session -d -s claude-launcher "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
+  tmux -f "$TMUX_CONF" attach-session -t claude-launcher
 }
 
 # ─── Uninstall Subcommand ─────────────────────────────────────────────────────
@@ -2324,4 +2352,12 @@ if [[ "$OPUS_1M_CHOICE" == "1" ]]; then
   opus_model="opus[1m]"
 fi
 
-exec claude --model "$opus_model" --permission-mode bypassPermissions "${EXTRA_ARGS[@]}"
+# Build the claude command - use printf %q to safely escape arguments
+CLAUDE_CMD="claude --model $opus_model --permission-mode bypassPermissions $(printf '%q ' "${EXTRA_ARGS[@]}")"
+
+# Setup tmux config
+TMUX_CONF=$(setup_tmux_config)
+
+# Launch in tmux session - create detached, then attach
+tmux -f "$TMUX_CONF" new-session -d -s claude-launcher "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
+tmux -f "$TMUX_CONF" attach-session -t claude-launcher
