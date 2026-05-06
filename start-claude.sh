@@ -60,7 +60,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.11"
+VERSION="1.2.12"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 # zsh 兼容：获取脚本路径
 # 在 zsh 中使用 ${(%):-%x}，在 bash 中使用 ${BASH_SOURCE[0]}
@@ -457,29 +457,14 @@ has_mise() {
 
 install_with_mise() {
   local dep="$1"
-  local plugin=""
   local install_cmd=""
 
   case "$dep" in
-    python3)
-      plugin="python"
-      install_cmd="mise install python"
-      ;;
-    node)
-      plugin="node"
-      install_cmd="mise install node"
-      ;;
-    bash)
-      plugin="bash"
-      install_cmd="mise install bash"
-      ;;
-    claude)
-      # Claude Code can be installed via npm in mise
-      install_cmd="mise install npm:@anthropic-ai/claude-code"
-      ;;
-    *)
-      return 1
-      ;;
+    python3) install_cmd="mise install python" ;;
+    node) install_cmd="mise install node" ;;
+    bash) install_cmd="mise install bash" ;;
+    claude) install_cmd="mise install claude" ;;
+    *) return 1 ;;
   esac
 
   if [[ -n "$install_cmd" ]]; then
@@ -492,24 +477,52 @@ install_with_mise() {
   return 1
 }
 
-check_dependencies() {
-  echo -e "${CYAN}${BOLD}  Checking dependencies...${RESET}"
+check_and_update_mise() {
+  echo -e "${CYAN}${BOLD}  Checking mise...${RESET}"
   echo ""
 
-  local missing_deps=()
-  local missing_optional=()
-
-  # Check for mise
   local has_mise=false
   if has_mise; then
     has_mise=true
     echo -e "  ${GREEN}✓${RESET} mise: $(mise --version)"
+
+    # Check for mise updates via mise self-update
+    echo ""
+    echo -e "  ${CYAN}Checking for mise updates...${RESET}"
+    local mise_out
+    mise_out=$(mise self-update 2>&1 || true)
+    if echo "$mise_out" | grep -q "up to date"; then
+      echo -e "  ${GREEN}✓ mise is up to date${RESET}"
+    elif echo "$mise_out" | grep -q "updated"; then
+      echo -e "  ${GREEN}✓ mise updated successfully${RESET}"
+      echo -e "  ${DIM}$mise_out${RESET}"
+    fi
   else
     echo -e "  ${YELLOW}✗${RESET} mise: not installed"
+    echo ""
+    echo -e "${YELLOW}Installing mise...${RESET}"
+    echo ""
+    if curl -sSL https://mise.run | bash 2>&1 | sed 's/^/  /'; then
+      export PATH="$HOME/.local/bin:$PATH"
+      source ~/.zshrc 2>/dev/null || true
+      if has_mise; then
+        echo ""
+        echo -e "${GREEN}✓ mise installed: $(mise --version)${RESET}"
+      fi
+    else
+      echo -e "${RED}✗ Failed to install mise${RESET}"
+    fi
   fi
+  echo ""
+}
+
+check_dependencies() {
+  echo -e "${CYAN}${BOLD}  Checking dependencies...${RESET}"
+  echo ""
 
   # Required dependencies
   local deps=("bash" "curl" "python3")
+  local missing_deps=()
   for dep in "${deps[@]}"; do
     if ! command -v "$dep" &>/dev/null; then
       missing_deps+=("$dep")
@@ -526,7 +539,7 @@ check_dependencies() {
     missing_deps+=("claude")
   fi
 
-  # Report status
+  # Report status for system tools
   echo -e "  ${GREEN}✓${RESET} bash: $(bash --version | head -1)"
   echo -e "  ${GREEN}✓${RESET} curl: $(curl --version | head -1 | awk '{print $1, $2}')"
   echo -e "  ${GREEN}✓${RESET} python3: $(python3 --version)"
@@ -543,6 +556,34 @@ check_dependencies() {
     echo -e "  ${YELLOW}✗${RESET} claude: not installed"
   fi
 
+  # Use mise to check and update tools if mise is available
+  if has_mise; then
+    echo ""
+    echo -e "${CYAN}${BOLD}  Checking for tool updates via mise...${RESET}"
+    echo ""
+
+    # List mise-managed tools with outdated versions
+    local mise_out
+    mise_out=$(mise outdated 2>&1 || true)
+
+    if [[ -n "$mise_out" && "$mise_out" != *"No outdated tools"* ]]; then
+      echo -e "${YELLOW}  Outdated tools found:${RESET}"
+      echo "$mise_out" | sed 's/^/    /' | head -20
+      echo ""
+      print -n "  Update all tools with mise? [Y/n]: " >&2
+      read update_choice
+      echo ""
+      if [[ -z "$update_choice" || "$update_choice" =~ ^[Yy]$ ]]; then
+        echo -e "${CYAN}  Updating tools via mise...${RESET}"
+        mise upgrade 2>&1 | sed 's/^/    /'
+        echo ""
+        echo -e "${GREEN}✓ Tools updated${RESET}"
+      fi
+    else
+      echo -e "  ${GREEN}✓${RESET} All mise-managed tools are up to date"
+    fi
+  fi
+
   # Install missing required dependencies
   if [[ ${#missing_deps[@]} -gt 0 ]]; then
     echo ""
@@ -551,14 +592,10 @@ check_dependencies() {
 
     # Try mise first if available, then fall back to brew
     local deps_to_install=()
-    local deps_installed_via_mise=()
 
     for dep in "${missing_deps[@]}"; do
-      if [[ "$dep" == "claude" ]]; then
-        # claude cannot be installed via mise
-        deps_to_install+=("$dep")
-      elif [[ "$has_mise" == "true" ]] && install_with_mise "$dep"; then
-        deps_installed_via_mise+=("$dep")
+      if has_mise && install_with_mise "$dep"; then
+        continue
       else
         deps_to_install+=("$dep")
       fi
@@ -578,27 +615,13 @@ check_dependencies() {
           local install_failed=false
 
           if [[ "$dep" == "claude" ]]; then
-            echo '  Installing claude via official installer...'
-            local install_script
-            install_script=$(curl -sSL https://claude.ai/install.sh) || true
-            if [[ "$install_script" == \<!* ]]; then
-              # Received HTML (region blocked or error page) — try npm fallback
-              echo -e "  ${YELLOW}Official installer not available, trying npm...${RESET}"
-              if command -v npm &>/dev/null; then
-                npm install -g @anthropic-ai/claude-code 2>&1 || install_failed=true
-              else
-                echo -e "  ${RED}npm not found — cannot install claude${RESET}"
-                install_failed=true
-              fi
-            else
-              echo "$install_script" | bash 2>&1 || install_failed=true
-            fi
+            install_via_official
           elif [[ "$dep" == "python3" ]]; then
-            brew install python3 2>&1 || install_failed=true
+            brew install python3 2>&1 | sed 's/^/    /' || install_failed=true
           elif [[ "$dep" == "node" ]]; then
-            brew install node 2>&1 || install_failed=true
+            brew install node 2>&1 | sed 's/^/    /' || install_failed=true
           else
-            brew install "$dep" 2>&1 || install_failed=true
+            brew install "$dep" 2>&1 | sed 's/^/    /' || install_failed=true
           fi
 
           # Check if this dependency is now available
