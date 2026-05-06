@@ -22,9 +22,16 @@ unbind C-b
 set -g prefix C-a
 bind C-a send-prefix
 
-# Status bar colors
+# Status bar
 set -g status-bg colour237
 set -g status-fg colour250
+set -g status-left-length 40
+set -g status-left "#[fg=colour39,bold] #S #[fg=colour250]│ "
+set -g status-right " #[fg=colour250]%H:%M %d-%b-%y "
+set -g status-interval 60
+set -g window-status-format " #I:#W "
+set -g window-status-current-format "#[fg=colour39,bold,bg=colour239] #I:#W #[bg=colour237]"
+set -g window-status-separator ""
 EOF
   echo "$tmux_conf"
 }
