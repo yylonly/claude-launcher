@@ -1,10 +1,26 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 # install.sh — Install claude-launcher to PATH
 
 set -euo pipefail
 
 # Version
-VERSION="1.2.10"
+VERSION="1.2.11"
+
+# Check for required commands
+check_dependencies() {
+    local missing=()
+    for cmd in curl chmod ln; do
+        if ! command -v "$cmd" &>/dev/null; then
+            missing+=("$cmd")
+        fi
+    done
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo -e "${RED}Error: Missing required commands: ${missing[*]}${RESET}"
+        exit 1
+    fi
+}
+
+check_dependencies
 
 # Colors
 BOLD='\033[1m'
@@ -17,10 +33,12 @@ SCRIPT_NAME="start-claude.sh"
 INSTALL_NAME="claude-launcher"
 DELETE_MCP_SCRIPT="delete-mcp.sh"
 DELETE_PLUGIN_SCRIPT="delete-plugin.sh"
+CLI_SKILLS_SCRIPT="cli-skills.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_FILE="${SCRIPT_DIR}/${SCRIPT_NAME}"
 DELETE_MCP_SOURCE="${SCRIPT_DIR}/${DELETE_MCP_SCRIPT}"
 DELETE_PLUGIN_SOURCE="${SCRIPT_DIR}/${DELETE_PLUGIN_SCRIPT}"
+CLI_SKILLS_SOURCE="${SCRIPT_DIR}/${CLI_SKILLS_SCRIPT}"
 
 # Find the best install directory
 find_install_dir() {
@@ -117,6 +135,7 @@ if command -v "$INSTALL_NAME" &>/dev/null; then
     echo -e "  ${BOLD}claude-launcher${RESET}"
     echo -e "  ${BOLD}delete-mcp${RESET}         — Delete local MCP servers"
     echo -e "  ${BOLD}delete-plugin${RESET}      — Delete Claude plugins"
+    echo -e "  ${BOLD}cli-skills${RESET}         — Install and manage skills"
 else
     echo ""
     echo -e "${YELLOW}Warning: ${INSTALL_NAME} not found in PATH${RESET}"
@@ -179,6 +198,30 @@ if [[ -f "$DELETE_PLUGIN_SOURCE" ]]; then
             sudo ln -sf "${INSTALL_DIR}/delete-plugin.sh" "${INSTALL_DIR}/delete-plugin"
         else
             ln -sf "${INSTALL_DIR}/delete-plugin.sh" "${INSTALL_DIR}/delete-plugin"
+        fi
+        echo -e "${GREEN}✓ Done${RESET}"
+    fi
+fi
+
+# Install cli-skills.sh if exists
+if [[ -f "$CLI_SKILLS_SOURCE" ]]; then
+    echo -n "Installing cli-skills.sh... "
+    if [[ "$USE_SUDO" == true ]]; then
+        sudo cp "$CLI_SKILLS_SOURCE" "${INSTALL_DIR}/cli-skills.sh"
+        sudo chmod +x "${INSTALL_DIR}/cli-skills.sh"
+    else
+        cp "$CLI_SKILLS_SOURCE" "${INSTALL_DIR}/cli-skills.sh"
+        chmod +x "${INSTALL_DIR}/cli-skills.sh"
+    fi
+    echo -e "${GREEN}✓ Done${RESET}"
+
+    # Create cli-skills symlink
+    if [[ ! -L "${INSTALL_DIR}/cli-skills" ]]; then
+        echo -n "Creating cli-skills symlink... "
+        if [[ "$USE_SUDO" == true ]]; then
+            sudo ln -sf "${INSTALL_DIR}/cli-skills.sh" "${INSTALL_DIR}/cli-skills"
+        else
+            ln -sf "${INSTALL_DIR}/cli-skills.sh" "${INSTALL_DIR}/cli-skills"
         fi
         echo -e "${GREEN}✓ Done${RESET}"
     fi
