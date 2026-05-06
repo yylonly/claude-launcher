@@ -60,7 +60,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
-VERSION="1.2.10"
+VERSION="1.2.11"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
 # zsh 兼容：获取脚本路径
 # 在 zsh 中使用 ${(%):-%x}，在 bash 中使用 ${BASH_SOURCE[0]}
@@ -691,114 +691,139 @@ switch_to_native_claude() {
 # ─── Claude Code installation check ──────────────────────────────────────────
 check_claude_code() {
   echo -e "${CYAN}${BOLD}  Checking Claude Code installation...${RESET}"
+  echo ""
+
+  # Get latest version from GitHub
+  local latest_version
+  latest_version=$(curl -sSL "https://api.github.com/repos/anthropics/claude-code/releases/latest" 2>/dev/null | grep '"tag_name"' | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | sed 's/^v//' || echo "")
 
   # Check if claude is installed
-  if ! command -v claude &>/dev/null; then
+  local claude_installed=false
+  local current_version=""
+
+  if command -v claude &>/dev/null; then
+    claude_installed=true
+    current_version=$(claude --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || echo "")
+    echo -e "  ${GREEN}✓${RESET} claude: v${current_version}"
+  else
+    echo -e "  ${YELLOW}✗${RESET} claude: not installed"
+  fi
+
+  # If claude is not installed, offer to install it
+  if [[ "$claude_installed" == "false" ]]; then
     echo ""
     echo -e "${YELLOW}Claude Code is not installed.${RESET}"
-    echo ""
-    echo "Claude Code is required to use this launcher."
     echo ""
     print -n "  Install Claude Code now? [Y/n]: " >&2
     read install_choice
     echo ""
 
     if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
-      echo -e "${CYAN}Installing Claude Code...${RESET}"
-      echo ""
-
-      # Use the official install command
-      if ! curl -sSL https://claude.ai/install.sh | bash; then
+      if has_mise; then
+        echo -e "${CYAN}Installing Claude Code via mise...${RESET}"
         echo ""
-        echo -e "${RED}Error: Failed to install Claude Code.${RESET}"
-        echo ""
-        echo "You can manually install it with:"
-        echo "  curl -sSL https://claude.ai/install.sh | bash"
-        echo ""
-        echo "Or visit: https://claude.ai/code"
-        exit 1
+        if mise install -y claude@latest 2>&1 | sed 's/^/  /'; then
+          echo ""
+          echo -e "${GREEN}✓ Claude Code installed successfully!${RESET}"
+        else
+          echo ""
+          echo -e "${RED}✗ Failed to install Claude Code via mise${RESET}"
+          echo "  Falling back to official installer..."
+          echo ""
+          install_via_official
+        fi
+      else
+        install_via_official
       fi
-
-      # Ensure ~/.local/bin is in PATH for this session
-      export PATH="$HOME/.local/bin:$PATH"
-
-      # Add to ~/.zshrc for persistence across sessions
-      if ! grep -q '~/.local/bin' ~/.zshrc 2>/dev/null; then
-        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-      fi
-
-      # Source ~/.zshrc to pick up updated PATH immediately
-      source ~/.zshrc
-
-      # Re-check if installation succeeded
-      if ! command -v claude &>/dev/null; then
-        echo ""
-        echo -e "${YELLOW}Installation completed but 'claude' command not found.${RESET}"
-        echo "Try running: source ~/.zshrc"
-        echo "Or manually add to ~/.zshrc: export PATH=\"\$HOME/.local/bin:\$PATH\""
-        exit 1
-      fi
-
-      echo ""
-      echo -e "${GREEN}✓ Claude Code installed successfully!${RESET}"
-      echo ""
     else
       echo "Installation cancelled. Claude Code is required."
       exit 1
     fi
   else
-    # Claude is installed, check version and update if needed
-    local current_version
-    current_version=$(claude --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[[0-9]+(\.[0-9]+)?' | head -n1 || echo "unknown")
-
-    echo -e "  ${DIM}Current version:${RESET} ${current_version}"
-    echo ""
-
-    # Detect if claude was installed via brew
-    local brew_installed=false
-    if [[ -f "/opt/homebrew/bin/claude" ]] && [[ "$(readlink -f /opt/homebrew/bin/claude 2>/dev/null)" == *"Caskroom/claude-code"* ]] || \
-       [[ -f "/usr/local/bin/claude" ]] && [[ "$(readlink -f /usr/local/bin/claude 2>/dev/null)" == *"Caskroom/claude-code"* ]]; then
-      brew_installed=true
-    fi
-
-    # Auto-update Claude Code if newer version available
-    echo -e "  ${CYAN}Checking for Claude Code updates...${RESET} (Press Enter to skip)"
-    claude update >/tmp/claude_update_output.txt 2>&1 &
-    local pid=$!
-    # Wait for Enter (skip) or 15 second timeout
-    read -t 15 -r && kill $pid 2>/dev/null && echo -e "${DIM}  (skipped)${RESET}"
-    wait $pid 2>/dev/null || true
-    local update_output=$(cat /tmp/claude_update_output.txt 2>/dev/null)
-    if echo "$update_output" | grep -q "Homebrew"; then
-      echo "  (Claude is managed by Homebrew, using brew upgrade)"
-      brew upgrade claude-code 2>&1 | sed 's/^/  /' || true
-
-      # Check if brew upgrade gave us the latest version
-      local new_version
-      new_version=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo "")
-      local latest_version
-      latest_version=$(curl -sSL "https://api.github.com/repos/anthropics/claude-code/releases/latest" 2>/dev/null | grep '"tag_name"' | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | sed 's/^v//' || echo "")
-
-      if [[ -n "$latest_version" && -n "$new_version" && "$new_version" != "$latest_version" ]]; then
+    # Claude is installed, check if update needed via mise
+    if has_mise; then
+      echo ""
+      if [[ -n "$latest_version" && "$current_version" != "$latest_version" ]]; then
+        echo -e "  ${CYAN}Latest version:${RESET} v${latest_version}"
+        echo -e "  ${YELLOW}Update available${RESET}"
         echo ""
-        echo -e "${YELLOW}Homebrew is behind!${RESET} Latest: v${latest_version}, Installed: v${new_version}"
+        print -n "  Update Claude Code via mise? [Y/n]: " >&2
+        read update_choice
         echo ""
-        echo "  1) Keep Homebrew version (v${new_version})"
-        echo "  2) Switch to official native version (v${latest_version}) - ${GREEN}recommended${RESET}"
-        echo ""
-        print -n "  Choice [2]: " >&2
-        read switch_choice
-        echo ""
-        if [[ -z "$switch_choice" || "$switch_choice" == "2" ]]; then
-          switch_to_native_claude
+        if [[ -z "$update_choice" || "$update_choice" =~ ^[Yy]$ ]]; then
+          echo -e "${CYAN}Updating Claude Code via mise...${RESET}"
+          echo ""
+          if mise install -y claude@latest 2>&1 | sed 's/^/  /'; then
+            echo ""
+            # Verify new version
+            local new_version
+            new_version=$(claude --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1 || echo "")
+            echo -e "${GREEN}✓ Claude Code updated to v${new_version}!${RESET}"
+          else
+            echo ""
+            echo -e "${RED}✗ Update failed${RESET}"
+          fi
         fi
+      else
+        echo -e "  ${GREEN}✓ Claude Code is up to date (v${current_version})${RESET}"
       fi
     else
-      echo "$update_output" | sed 's/^/  /'
+      # No mise, use built-in update check
+      echo ""
+      echo -e "  ${CYAN}Checking for updates...${RESET} (Press Enter to skip)"
+      claude update >/tmp/claude_update_output.txt 2>&1 &
+      local pid=$!
+      read -t 15 -r && kill $pid 2>/dev/null && echo -e "${DIM}  (skipped)${RESET}"
+      wait $pid 2>/dev/null || true
+      local update_output=$(cat /tmp/claude_update_output.txt 2>/dev/null)
+      if echo "$update_output" | grep -q "Homebrew"; then
+        echo "  (Claude is managed by Homebrew)"
+        brew upgrade claude-code 2>&1 | sed 's/^/  /' || true
+      else
+        echo "$update_output" | sed 's/^/  /'
+      fi
     fi
+  fi
+  echo ""
+}
+
+# Install Claude Code via official installer
+install_via_official() {
+  echo -e "${CYAN}Installing Claude Code via official installer...${RESET}"
+  echo ""
+
+  if ! curl -sSL https://claude.ai/install.sh | bash 2>&1 | sed 's/^/  /'; then
     echo ""
+    echo -e "${RED}Error: Failed to install Claude Code.${RESET}"
+    echo ""
+    echo "You can manually install it with:"
+    echo "  curl -sSL https://claude.ai/install.sh | bash"
+    echo ""
+    echo "Or visit: https://claude.ai/code"
+    exit 1
   fi
 
+  # Ensure ~/.local/bin is in PATH for this session
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Add to ~/.zshrc for persistence
+  if ! grep -q '\.local/bin' ~/.zshrc 2>/dev/null; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+  fi
+
+  source ~/.zshrc 2>/dev/null || true
+
+  # Re-check if installation succeeded
+  if ! command -v claude &>/dev/null; then
+    echo ""
+    echo -e "${YELLOW}Installation completed but 'claude' command not found.${RESET}"
+    echo "Try running: source ~/.zshrc"
+    exit 1
+  fi
+
+  echo ""
+  echo -e "${GREEN}✓ Claude Code installed successfully!${RESET}"
+  echo ""
 }
 
 # ─── Claude-hud plugin check and install ─────────────────────────────────────
