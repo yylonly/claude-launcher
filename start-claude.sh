@@ -566,7 +566,15 @@ check_dependencies() {
     local mise_out
     mise_out=$(mise outdated 2>&1 || true)
 
-    if [[ -n "$mise_out" && "$mise_out" != *"No outdated tools"* ]]; then
+    # Check if there are actually outdated tools (look for specific patterns indicating updates available)
+    local has_outdated=false
+    if [[ -n "$mise_out" ]]; then
+      if echo "$mise_out" | grep -vqE "(up to date|No outdated|already|latest)" 2>/dev/null; then
+        has_outdated=true
+      fi
+    fi
+
+    if [[ "$has_outdated" == "true" ]]; then
       echo -e "${YELLOW}  Outdated tools found:${RESET}"
       echo "$mise_out" | sed 's/^/    /' | head -20
       echo ""
@@ -582,6 +590,26 @@ check_dependencies() {
     else
       echo -e "  ${GREEN}✓${RESET} All mise-managed tools are up to date"
     fi
+
+    # Display all mise-managed tools with remote latest versions
+    echo ""
+    echo -e "${CYAN}  Installed tools:${RESET}"
+    echo ""
+    printf "    %-12s %-12s %-12s\n" "Tool" "Current" "Remote"
+    printf "    %-12s %-12s %-12s\n" "----" "-------" "------"
+    mise ls 2>/dev/null | while read -r line; do
+      tool=$(echo "$line" | awk '{print $1}')
+      current=$(echo "$line" | awk '{print $2}')
+      if [[ -n "$tool" && "$tool" != "Tool" ]]; then
+        latest=$(mise latest "$tool" 2>/dev/null || echo "$current")
+        if [[ "$current" == "$latest" ]]; then
+          printf "    %-12s %-12s %-12s\n" "$tool" "$current" "$latest"
+        else
+          printf "    %-12s %-12s %-12s ${YELLOW}↑${RESET}\n" "$tool" "$current" "$latest"
+        fi
+      fi
+    done 2>/dev/null | head -20
+    echo ""
   fi
 
   # Install missing required dependencies
