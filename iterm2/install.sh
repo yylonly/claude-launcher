@@ -5,9 +5,11 @@ set -euo pipefail
 
 # Colors
 BOLD='\033[1m'
+CYAN='\033[36m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
 RED='\033[31m'
+DIM='\033[2m'
 RESET='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
@@ -97,28 +99,30 @@ echo ""
 if [[ -f "$CONFIG_FILE" ]]; then
     echo -e "${CYAN}Importing iTerm2 configuration...${RESET}"
 
-    # Use defaults to import the plist
-    # Note: This will merge with existing preferences
     local pref_file="${HOME}/Library/Preferences/com.googlecode.iterm2.plist"
 
     # Backup existing preferences
     if [[ -f "$pref_file" ]]; then
         cp "$pref_file" "${pref_file}.backup-$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+        echo -e "  ${DIM}Backed up existing preferences${RESET}"
     fi
 
-    # Import the configuration
-    if plutil -convert xml1 - "$CONFIG_FILE" 2>/dev/null | defaults import com.googlecode.iterm2 - 2>/dev/null; then
-        echo -e "${GREEN}✓ iTerm2 configuration imported!${RESET}"
-        echo ""
-        echo "Please restart iTerm2 for changes to take effect."
+    # Import the configuration using plutil
+    if plutil -replace "New Bookmarks" -xml "$(plutil -convert xml1 -stdout "$CONFIG_FILE" 2>/dev/null | plutil -extract "New Bookmarks" -xml -stdout - 2>/dev/null)" "$pref_file" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${RESET} iTerm2 configuration imported"
+    elif plutil -convert xml1 -stdout "$CONFIG_FILE" 2>/dev/null | defaults import com.googlecode.iterm2 - 2>/dev/null; then
+        echo -e "  ${GREEN}✓${RESET} iTerm2 configuration imported"
     else
-        echo -e "${YELLOW}Warning: Could not import via defaults${RESET}"
-        echo "  Please manually import: ${CONFIG_FILE}"
-        echo "  iTerm2 → Preferences → General → Preferences → Load preferences from a custom folder"
+        # Fallback: copy the file directly
+        cp "$CONFIG_FILE" "$pref_file" 2>/dev/null && echo -e "  ${GREEN}✓${RESET} iTerm2 configuration copied"
     fi
+
+    echo ""
+    echo -e "${DIM}Please restart iTerm2 for changes to take effect.${RESET}"
 else
-    echo -e "${YELLOW}No configuration file found at:${RESET} $CONFIG_FILE"
+    echo -e "${YELLOW}⚠ No configuration file found: ${CONFIG_FILE}${RESET}"
+    echo -e "${DIM}Run export.sh on the source machine first.${RESET}"
 fi
 
 echo ""
-echo -e "${GREEN}✓ Installation complete!${RESET}"
+echo -e "${GREEN}✓ Setup complete!${RESET}"

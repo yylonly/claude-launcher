@@ -196,18 +196,21 @@ Export and import your iTerm2 settings across machines:
 
 ```bash
 # On source machine - export current iTerm2 config
-cd claude-launcher
 ./iterm2/export.sh
 
-# On target machine - install iTerm2 + SF Mono font + import config
-cd claude-launcher
+# On target machine - one-click install + auto import
 ./iterm2/install.sh
 ```
 
-The installer will:
+**`install.sh` will automatically:**
 1. Download and install iTerm2 (if not present)
 2. Install SF Mono font
 3. Import your saved iTerm2 configuration
+
+**Workflow:**
+1. On source machine: run `export.sh` to save current config
+2. Copy `iterm2/` directory to target machine
+3. On target machine: run `install.sh` for one-click setup
 
 ### mise Tool Management
 
