@@ -1,26 +1,54 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 # start-claude.sh — Interactive launcher for Claude Code
 # Supports Anthropic, MiniMaxi, and Bailian (DashScope) providers
 
-set -euo pipefail
+# zsh 兼容设置
+set -eo pipefail
+# 在 zsh 中，-u 选项行为不同：未定义变量直接报错而非空展开
+# 故不使用 set -u，改用 set -e 和 set -o pipefail
 
 # ─── Ensure ~/.local/bin and ~/bin are on PATH ─────────────────────────────
 export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 
 # ─── Re-run with PTY if stdin is not a terminal ─────────────────────────────
-if [[ ! -t 0 ]]; then
+# Detect if already inside script to avoid problematic nesting
+already_in_script=false
+
+# Check parent process name for script (avoid re-exec into nested script)
+if [[ -n "${PPID:-}" ]]; then
+  parent_name=$(ps -p $PPID -o comm= 2>/dev/null || echo "")
+  if [[ "$parent_name" == *"script"* ]]; then
+    already_in_script=true
+  fi
+fi
+
+# Skip PTY re-exec if already in tmux (tmux provides its own PTY)
+# Also skip if TMUX is set (even if we can't detect parent name)
+if [[ -n "${TMUX:-}" ]]; then
+  already_in_script=true
+fi
+
+if [[ ! -t 0 ]] && [[ "$already_in_script" == "false" ]]; then
   exec script -q /dev/null "$0" "$@"
 fi
 
-# ─── Run inside tmux if not already in a tmux session ─────────────────────
-if [[ -z "${TMUX:-}" ]]; then
-  exec tmux new-session -A -s claude "$0" "$@"
+# ─── Load config ──────────────────────────────────────────────────────────────
+CONFIG_FILE="${HOME}/.claude-launcher.conf"
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck source=/dev/null
+  source "$CONFIG_FILE"
 fi
 
 # ─── Version & Update ─────────────────────────────────────────────────────
 VERSION="1.2.10"
 UPDATE_URL="https://raw.githubusercontent.com/yylonly/claude-launcher/main/start-claude.sh"
-SCRIPT_PATH="${BASH_SOURCE[0]}"
+# zsh 兼容：获取脚本路径
+# 在 zsh 中使用 ${(%):-%x}，在 bash 中使用 ${BASH_SOURCE[0]}
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_PATH="${BASH_SOURCE[0]}"
+else
+  SCRIPT_PATH="${(%):-%x}"
+fi
 if [[ -L "$SCRIPT_PATH" ]]; then
     SCRIPT_PATH="$(readlink -f "$SCRIPT_PATH")"
 fi
@@ -54,7 +82,8 @@ ensure_local_bin_in_path() {
     echo -e "${YELLOW}~/.local/bin is not in your PATH.${RESET}"
     echo "  This is needed for Claude Code and other tools."
     echo ""
-    read -rp "  Add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to ~/.zshrc? [Y/n]: " add_path
+    print -n "  Add 'export PATH=\"$HOME/.local/bin:$PATH\"' to ~/.zshrc? [Y/n]: " >&2
+    read add_path
     echo ""
     if [[ -z "$add_path" || "$add_path" =~ ^[Yy]$ ]]; then
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
@@ -79,7 +108,8 @@ check_update() {
     if [[ "$remote_version" != "$VERSION" ]]; then
         echo -e "${YELLOW}Update available:${RESET} v${VERSION} → v${remote_version}"
         echo ""
-        read -rp "  Update now? [y/N]: " update_choice
+        print -n "  Update now? [y/N]: " >&2
+        read update_choice
         if [[ "$update_choice" =~ ^[Yy]$ ]]; then
             echo -e "${CYAN}Updating...${RESET}"
             local tmp_file
@@ -279,7 +309,7 @@ load_defaults() {
   DEFAULT_BRAVE_SEARCH="2" # 1=enable, 2=skip
   DEFAULT_TAVILY_SEARCH="2" # 1=enable, 2=skip
   DEFAULT_MINIMAX_CLI="2"  # 1=install, 2=skip
-  SAVED_MINIMAX_API_KEY=""
+    SAVED_MINIMAX_API_KEY=""
   SAVED_DASHSCOPE_API_KEY=""
   SAVED_BRAVE_API_KEY=""
   SAVED_TAVILY_API_KEY=""
@@ -370,24 +400,27 @@ pick() {
   local choice
   while true; do
     if [[ -n "$default" ]]; then
-      read -rp "  $prompt [1-$max] (default: $default): " choice
+      print -n "  $prompt [1-$max] (default: $default): " >&2
+      read choice
       if [[ -z "$choice" ]]; then choice="$default"; fi
     else
-      read -rp "  $prompt [1-$max]: " choice
+      print -n "  $prompt [1-$max]: " >&2
+      read choice
     fi
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= max )); then
       echo "$choice"; return
     fi
-    echo -e "  ${YELLOW}Please enter a number between 1 and $max.${RESET}"
+    echo -e "  ${YELLOW}Please enter a number between 1 and $max.${RESET}" >&2
   done
 }
 
 require_key() {
   local var="$1"
   local label="$2"
-  local key="${!var:-}"
+  local key="${(P)var:-}"
   if [[ -z "$key" ]]; then
-    read -rsp "  Enter $label API key: " key
+    print -n "  Enter $label API key: " >&2
+    read -rs key
     echo ""
     if [[ -z "$key" ]]; then
       echo -e "  ${RED}Error:${RESET} No API key provided." >&2
@@ -398,12 +431,62 @@ require_key() {
 }
 
 # ─── Dependency check & install ──────────────────────────────────────────────
+has_mise() {
+  command -v mise &>/dev/null
+}
+
+install_with_mise() {
+  local dep="$1"
+  local plugin=""
+  local install_cmd=""
+
+  case "$dep" in
+    python3)
+      plugin="python"
+      install_cmd="mise install python"
+      ;;
+    node)
+      plugin="node"
+      install_cmd="mise install node"
+      ;;
+    bash)
+      plugin="bash"
+      install_cmd="mise install bash"
+      ;;
+    claude)
+      # Claude Code can be installed via npm in mise
+      install_cmd="mise install npm:@anthropic-ai/claude-code"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  if [[ -n "$install_cmd" ]]; then
+    echo -e "  ${CYAN}Installing $dep via mise...${RESET}"
+    if eval "$install_cmd" 2>&1; then
+      echo -e "  ${GREEN}✓ $dep installed via mise${RESET}"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 check_dependencies() {
   echo -e "${CYAN}${BOLD}  Checking dependencies...${RESET}"
   echo ""
 
   local missing_deps=()
   local missing_optional=()
+
+  # Check for mise
+  local has_mise=false
+  if has_mise; then
+    has_mise=true
+    echo -e "  ${GREEN}✓${RESET} mise: $(mise --version)"
+  else
+    echo -e "  ${YELLOW}✗${RESET} mise: not installed"
+  fi
 
   # Required dependencies
   local deps=("bash" "curl" "python3")
@@ -445,51 +528,72 @@ check_dependencies() {
     echo ""
     echo -e "${YELLOW}Missing required dependencies:${RESET} ${missing_deps[*]}"
     echo ""
-    read -rp "  Install missing dependencies with brew? [Y/n]: " install_choice
-    echo ""
 
-    if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
-      for dep in "${missing_deps[@]}"; do
-        echo ""
-        echo -e "  ${CYAN}Installing $dep...${RESET}"
-        local install_failed=false
+    # Try mise first if available, then fall back to brew
+    local deps_to_install=()
+    local deps_installed_via_mise=()
 
-        if [[ "$dep" == "claude" ]]; then
-          echo '  Installing claude via official installer...'
-          local install_script
-          install_script=$(curl -sSL https://claude.ai/install.sh) || true
-          if [[ "$install_script" == \<!* ]]; then
-            # Received HTML (region blocked or error page) — try npm fallback
-            echo -e "  ${YELLOW}Official installer not available, trying npm...${RESET}"
-            if command -v npm &>/dev/null; then
-              npm install -g @anthropic-ai/claude-code 2>&1 || install_failed=true
-            else
-              echo -e "  ${RED}npm not found — cannot install claude${RESET}"
-              install_failed=true
-            fi
-          else
-            echo "$install_script" | bash 2>&1 || install_failed=true
-          fi
-        elif [[ "$dep" == "python3" ]]; then
-          brew install python3 2>&1 || install_failed=true
-        elif [[ "$dep" == "node" ]]; then
-          brew install node 2>&1 || install_failed=true
-        else
-          brew install "$dep" 2>&1 || install_failed=true
-        fi
+    for dep in "${missing_deps[@]}"; do
+      if [[ "$dep" == "claude" ]]; then
+        # claude cannot be installed via mise
+        deps_to_install+=("$dep")
+      elif [[ "$has_mise" == "true" ]] && install_with_mise "$dep"; then
+        deps_installed_via_mise+=("$dep")
+      else
+        deps_to_install+=("$dep")
+      fi
+    done
 
-        # Check if this dependency is now available
-        if ! command -v "$dep" &>/dev/null; then
+    # Install remaining deps via brew
+    if [[ ${#deps_to_install[@]} -gt 0 ]]; then
+      echo ""
+      print -n "  Install missing dependencies with brew? [Y/n]: " >&2
+      read install_choice
+      echo ""
+
+      if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
+        for dep in "${deps_to_install[@]}"; do
           echo ""
-          echo -e "  ${RED}Failed to install $dep${RESET}"
-          echo "  Please install manually and run again."
-          exit 1
-        fi
-        echo -e "  ${GREEN}✓ $dep installed${RESET}"
-      done
-    else
-      echo "Cannot proceed without required dependencies."
-      exit 1
+          echo -e "  ${CYAN}Installing $dep via brew...${RESET}"
+          local install_failed=false
+
+          if [[ "$dep" == "claude" ]]; then
+            echo '  Installing claude via official installer...'
+            local install_script
+            install_script=$(curl -sSL https://claude.ai/install.sh) || true
+            if [[ "$install_script" == \<!* ]]; then
+              # Received HTML (region blocked or error page) — try npm fallback
+              echo -e "  ${YELLOW}Official installer not available, trying npm...${RESET}"
+              if command -v npm &>/dev/null; then
+                npm install -g @anthropic-ai/claude-code 2>&1 || install_failed=true
+              else
+                echo -e "  ${RED}npm not found — cannot install claude${RESET}"
+                install_failed=true
+              fi
+            else
+              echo "$install_script" | bash 2>&1 || install_failed=true
+            fi
+          elif [[ "$dep" == "python3" ]]; then
+            brew install python3 2>&1 || install_failed=true
+          elif [[ "$dep" == "node" ]]; then
+            brew install node 2>&1 || install_failed=true
+          else
+            brew install "$dep" 2>&1 || install_failed=true
+          fi
+
+          # Check if this dependency is now available
+          if ! command -v "$dep" &>/dev/null; then
+            echo ""
+            echo -e "  ${RED}Failed to install $dep${RESET}"
+            echo "  Please install manually and run again."
+            exit 1
+          fi
+          echo -e "  ${GREEN}✓ $dep installed${RESET}"
+        done
+      else
+        echo "Cannot proceed without required dependencies."
+        exit 1
+      fi
     fi
   fi
 
@@ -575,7 +679,8 @@ check_claude_code() {
     echo ""
     echo "Claude Code is required to use this launcher."
     echo ""
-    read -rp "  Install Claude Code now? [Y/n]: " install_choice
+    print -n "  Install Claude Code now? [Y/n]: " >&2
+    read install_choice
     echo ""
 
     if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
@@ -661,7 +766,8 @@ check_claude_code() {
         echo "  1) Keep Homebrew version (v${new_version})"
         echo "  2) Switch to official native version (v${latest_version}) - ${GREEN}recommended${RESET}"
         echo ""
-        read -rp "  Choice [2]: " switch_choice
+        print -n "  Choice [2]: " >&2
+        read switch_choice
         echo ""
         if [[ -z "$switch_choice" || "$switch_choice" == "2" ]]; then
           switch_to_native_claude
@@ -998,7 +1104,7 @@ quick_launch() {
   BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"
   TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}"
   MINIMAX_CLI_CHOICE="${DEFAULT_MINIMAX_CLI:-2}"
-
+  
   # Save current directory for resume
   LAST_PROJECT_DIR="$(pwd)"
 
@@ -1025,7 +1131,7 @@ quick_launch() {
       BASE_URL="https://api.minimaxi.com/anthropic"
       API_KEY_VAR="MINIMAX_API_KEY"
 
-      if [[ -z "${!API_KEY_VAR:-}" ]]; then
+      if [[ -z "${(P)API_KEY_VAR:-}" ]]; then
         echo -e "${RED}Error: MiniMax API key not found.${RESET}"
         echo "Run with -c to configure."
         exit 1
@@ -1041,7 +1147,7 @@ quick_launch() {
         *) SELECTED_MODEL="MiniMax-M2.7" ;;
       esac
 
-      write_minimax_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE" "$AUTOCOMPACT_CHOICE"
+      write_minimax_settings "${(P)API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE" "$AUTOCOMPACT_CHOICE"
       ensure_onboarding
 
       EXTRA_ARGS+=(
@@ -1055,7 +1161,7 @@ quick_launch() {
       API_KEY_VAR="DASHSCOPE_API_KEY"
       restore_settings
 
-      if [[ -z "${!API_KEY_VAR:-}" ]]; then
+      if [[ -z "${(P)API_KEY_VAR:-}" ]]; then
         echo -e "${RED}Error: DashScope API key not found.${RESET}"
         echo "Run with -c to configure."
         exit 1
@@ -1075,7 +1181,7 @@ quick_launch() {
         *) SELECTED_MODEL="qwen3-max-2026-01-23" ;;
       esac
 
-      write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE" "$AUTOCOMPACT_CHOICE"
+      write_bailian_settings "${(P)API_KEY_VAR}" "$SELECTED_MODEL" "$AGENT_TEAMS_CHOICE" "$AUTOCOMPACT_CHOICE"
       ensure_onboarding
 
       EXTRA_ARGS+=(
@@ -1093,7 +1199,7 @@ quick_launch() {
   # Set environment variables
   if [[ "$PROVIDER" != "anthropic" ]]; then
     export ANTHROPIC_BASE_URL="$BASE_URL"
-    export ANTHROPIC_AUTH_TOKEN="${!API_KEY_VAR}"
+    export ANTHROPIC_AUTH_TOKEN="${(P)API_KEY_VAR}"
   fi
 
   if [[ "$AGENT_TEAMS_CHOICE" == "1" ]]; then
@@ -1200,7 +1306,8 @@ run_uninstall() {
     echo ""
   fi
 
-  read -p "Do you want to proceed? [y/N]: " confirm
+  print -n "Do you want to proceed? [y/N]: " >&2
+  read confirm
   echo ""
 
   if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
@@ -1229,7 +1336,8 @@ run_uninstall() {
       echo "  - $f"
     done
     echo ""
-    read -p "Remove configuration files as well? [y/N]: " remove_config
+    print -n "Remove configuration files as well? [y/N]: " >&2
+    read remove_config
     echo ""
 
     if [[ "$remove_config" =~ ^[Yy]$ ]]; then
@@ -1244,7 +1352,8 @@ run_uninstall() {
       CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
       if [[ -f "$CLAUDE_SETTINGS" && -f "${CLAUDE_SETTINGS}.orig" ]]; then
         echo ""
-        read -p "Restore original Claude Code settings? [y/N]: " restore_settings
+        print -n "Restore original Claude Code settings? [y/N]: " >&2
+        read restore_settings
         if [[ "$restore_settings" =~ ^[Yy]$ ]]; then
           mv "${CLAUDE_SETTINGS}.orig" "$CLAUDE_SETTINGS"
           echo -e "${GREEN}Original settings restored.${RESET}"
@@ -1364,7 +1473,8 @@ PYEOF
     fi
 
     echo -e "${YELLOW}This will delete all local MCP servers.${RESET}"
-    read -rp "Continue? [y/N]: " confirm
+    print -n "Continue? [y/N]: " >&2
+    read confirm
 
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
       python3 - "$CLAUDE_JSON" <<'PYEOF'
@@ -1743,7 +1853,7 @@ if [[ "$RESUME_MODE" -eq 1 ]]; then
   BRAVE_SEARCH_CHOICE="${DEFAULT_BRAVE_SEARCH:-2}"
   TAVILY_SEARCH_CHOICE="${DEFAULT_TAVILY_SEARCH:-2}"
   MINIMAX_CLI_CHOICE="${DEFAULT_MINIMAX_CLI:-2}"
-
+  
   case "$DEFAULT_PLAN" in
     1)  # Anthropic
       PROVIDER="anthropic"
@@ -2004,7 +2114,7 @@ case "$PLAN_CHOICE" in
     AUTOCOMPACT_CHOICE=$(pick "Auto-Compact" 5 "$DEFAULT_AUTOCOMPACT")
 
     # Write Bailian settings for Claude Code (after model is selected)
-    write_bailian_settings "${!API_KEY_VAR}" "$SELECTED_MODEL" "${AGENT_TEAMS_CHOICE}" "$AUTOCOMPACT_CHOICE"
+    write_bailian_settings "${(P)API_KEY_VAR}" "$SELECTED_MODEL" "${AGENT_TEAMS_CHOICE}" "$AUTOCOMPACT_CHOICE"
     ensure_onboarding
 
     EXTRA_ARGS+=(
@@ -2035,46 +2145,46 @@ fi
 # ─── Step 2.7 — MiniMax CLI Option ──────────────────────────────────────────────
 echo ""
 print_menu "Install MiniMax CLI (mmx)?" \
-  "[Yes] Install  — Install mmx-cli for token management and CLI access" \
-  "[No]  Skip     — Do not install mmx-cli"
+  "Install  — Install mmx-cli for token management and CLI access" \
+  "Skip     — Do not install mmx-cli"
 MINIMAX_CLI_CHOICE=$(pick "MiniMax CLI" 2 "2")
 
 if [[ "$MINIMAX_CLI_CHOICE" == "1" ]]; then
-  echo -e "${CYAN}Installing MiniMax CLI...${RESET}"
+  echo -e "  ${CYAN}Installing MiniMax CLI...${RESET}"
   install_mmx_success=false
   if command -v npm &>/dev/null; then
-    if npm install -g mmx-cli 2>&1; then
-      echo -e "${GREEN}✓ MiniMax CLI installed successfully!${RESET}"
+    if npm install -g mmx-cli 2>&1 | sed 's/^/  /'; then
+      echo -e "  ${GREEN}✓ MiniMax CLI installed successfully!${RESET}"
       install_mmx_success=true
     else
-      echo -e "${YELLOW}⚠ Failed to install mmx-cli via npm, trying bun...${RESET}"
+      echo -e "  ${YELLOW}⚠ Failed to install mmx-cli via npm, trying bun...${RESET}"
       if command -v bun &>/dev/null; then
-        if bun install -g mmx-cli 2>&1; then
-          echo -e "${GREEN}✓ MiniMax CLI installed via bun!${RESET}"
+        if bun install -g mmx-cli 2>&1 | sed 's/^/  /'; then
+          echo -e "  ${GREEN}✓ MiniMax CLI installed via bun!${RESET}"
           install_mmx_success=true
         else
-          echo -e "${RED}✗ Failed to install mmx-cli${RESET}"
+          echo -e "  ${RED}✗ Failed to install mmx-cli${RESET}"
         fi
       else
-        echo -e "${RED}✗ npm failed and bun is not available${RESET}"
+        echo -e "  ${RED}✗ npm failed and bun is not available${RESET}"
       fi
     fi
   elif command -v bun &>/dev/null; then
-    if bun install -g mmx-cli 2>&1; then
-      echo -e "${GREEN}✓ MiniMax CLI installed via bun!${RESET}"
+    if bun install -g mmx-cli 2>&1 | sed 's/^/  /'; then
+      echo -e "  ${GREEN}✓ MiniMax CLI installed via bun!${RESET}"
       install_mmx_success=true
     else
-      echo -e "${RED}✗ Failed to install mmx-cli${RESET}"
+      echo -e "  ${RED}✗ Failed to install mmx-cli${RESET}"
     fi
   else
-    echo -e "${RED}✗ npm or bun is required to install mmx-cli${RESET}"
+    echo -e "  ${RED}✗ npm or bun is required to install mmx-cli${RESET}"
   fi
 
   # Verify mmx auth if installed and API key is available
   if [[ "$install_mmx_success" == "true" ]] && [[ -n "${MINIMAX_API_KEY:-}" ]]; then
     echo ""
-    echo -e "${CYAN}Verifying Minimax API key with mmx...${RESET}"
-    if mmx auth login --api-key "$MINIMAX_API_KEY" 2>&1; then
+    echo -e "  ${CYAN}Verifying Minimax API key with mmx...${RESET}"
+    if mmx auth login --api-key "$MINIMAX_API_KEY" 2>&1 | sed 's/^/  /'; then
       echo ""
     fi
   fi
@@ -2105,7 +2215,8 @@ if [[ "$BRAVE_SEARCH_CHOICE" == "1" ]]; then
   fi
 
   if [[ $has_brave_key -eq 0 ]]; then
-    read -rsp "  Enter Brave Search API key: " BRAVE_API_KEY
+    print -n "  Enter Brave Search API key: " >&2
+    read -rs BRAVE_API_KEY
     echo ""
     if [[ -z "$BRAVE_API_KEY" ]]; then
       echo -e "${YELLOW}No API key provided, skipping Brave Search.${RESET}"
@@ -2144,7 +2255,8 @@ if [[ "$TAVILY_SEARCH_CHOICE" == "1" ]]; then
   fi
 
   if [[ $has_tavily_key -eq 0 ]]; then
-    read -rsp "  Enter Tavily Search API key (starts with tvly-): " TAVILY_API_KEY
+    print -n "  Enter Tavily Search API key (starts with tvly-): " >&2
+    read -rs TAVILY_API_KEY
     echo ""
     if [[ -z "$TAVILY_API_KEY" ]]; then
       echo -e "${YELLOW}No API key provided, skipping Tavily Search.${RESET}"
@@ -2168,7 +2280,7 @@ save_defaults
 # ─────────────────────────────────────────────────────────────────────────────
 if [[ "$PROVIDER" != "anthropic" ]]; then
   export ANTHROPIC_BASE_URL="$BASE_URL"
-  export ANTHROPIC_AUTH_TOKEN="${!API_KEY_VAR}"
+  export ANTHROPIC_AUTH_TOKEN="${(P)API_KEY_VAR}"
 fi
 
 # Agent Teams support for all providers
