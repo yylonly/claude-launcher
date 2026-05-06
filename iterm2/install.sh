@@ -1,0 +1,124 @@
+#!/usr/bin/env zsh
+# install-iterm.sh — Install iTerm2 and import configuration
+
+set -euo pipefail
+
+# Colors
+BOLD='\033[1m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+RED='\033[31m'
+RESET='\033[0m'
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/config.xml"
+
+echo -e "${BOLD}iTerm2 Installer${RESET}"
+echo "=================="
+echo ""
+
+# Check if iTerm2 is installed
+if [[ -d "/Applications/iTerm.app" ]]; then
+    echo -e "${GREEN}✓${RESET} iTerm2 is already installed"
+else
+    echo -e "${YELLOW}iTerm2 is not installed.${RESET}"
+    echo ""
+    print -n "  Download and install iTerm2? [Y/n]: " >&2
+    read install_choice
+    echo ""
+
+    if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
+        echo -e "${CYAN}Downloading iTerm2...${RESET}"
+        local tmp_dmg=$(mktemp).dmg
+        if curl -sSL "https://iterm2.com/downloads/latest/iTerm2-Latest.dmg" -o "$tmp_dmg"; then
+            echo -e "${CYAN}Installing iTerm2...${RESET}"
+            hdiutil attach "$tmp_dmg" -nobrowse 2>/dev/null || true
+            cp -r "/Volumes/iTerm2-*/iTerm.app" "/Applications/" 2>/dev/null || {
+                echo -e "${RED}Failed to copy iTerm.app${RESET}"
+                rm -f "$tmp_dmg"
+                exit 1
+            }
+            hdiutil detach "/Volumes/iTerm2-*" 2>/dev/null || true
+            rm -f "$tmp_dmg"
+            echo -e "${GREEN}✓ iTerm2 installed successfully!${RESET}"
+        else
+            echo -e "${RED}Failed to download iTerm2${RESET}"
+            exit 1
+        fi
+    else
+        echo "Installation cancelled."
+        exit 0
+    fi
+fi
+
+# Install SF Mono font
+echo ""
+echo -e "${CYAN}Installing SF Mono font...${RESET}"
+FONT_DIR="${HOME}/Library/Fonts"
+mkdir -p "$FONT_DIR"
+
+# Check if SF Mono is already installed
+if fc-list | grep -qi "sf mono"; then
+    echo -e "${GREEN}✓${RESET} SF Mono font is already installed"
+else
+    echo "  Downloading SF Mono font..."
+    local tmp_zip=$(mktemp).zip
+    local font_url="https://developer.apple.com/design/downloads/SF-Mono.dmg"
+
+    if curl -sSL "$font_url" -o "$tmp_zip"; then
+        # Mount the DMG
+        local mount_point=$(mktemp -d)
+        hdiutil attach "$tmp_zip" -mountpoint "$mount_point" -nobrowse 2>/dev/null || {
+            echo -e "${YELLOW}Warning: Could not mount DMG, trying alternative method${RESET}"
+            rm -f "$tmp_zip"
+            # Try to install from system fonts
+            if [[ -f "/System/Library/Fonts/Monaco.ttf" ]]; then
+                cp "/System/Library/Fonts/Monaco.ttf" "$FONT_DIR/" 2>/dev/null && echo -e "${GREEN}✓${RESET} Monaco font installed"
+            fi
+            return 0
+        }
+
+        # Copy all font files
+        find "$mount_point" -name "*.ttf" -o -name "*.otf" 2>/dev/null | while read -r font; do
+            cp "$font" "$FONT_DIR/" 2>/dev/null && echo "  Installed: $(basename "$font")"
+        done
+
+        hdiutil detach "$mount_point" 2>/dev/null || true
+        rm -f "$tmp_zip"
+        echo -e "${GREEN}✓ SF Mono font installed${RESET}"
+    else
+        echo -e "${YELLOW}Warning: Could not download SF Mono font${RESET}"
+        echo "  You can manually install from: https://developer.apple.com/fonts/"
+    fi
+fi
+
+# Import iTerm2 configuration
+echo ""
+if [[ -f "$CONFIG_FILE" ]]; then
+    echo -e "${CYAN}Importing iTerm2 configuration...${RESET}"
+
+    # Use defaults to import the plist
+    # Note: This will merge with existing preferences
+    local pref_file="${HOME}/Library/Preferences/com.googlecode.iterm2.plist"
+
+    # Backup existing preferences
+    if [[ -f "$pref_file" ]]; then
+        cp "$pref_file" "${pref_file}.backup-$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+    fi
+
+    # Import the configuration
+    if plutil -convert xml1 - "$CONFIG_FILE" 2>/dev/null | defaults import com.googlecode.iterm2 - 2>/dev/null; then
+        echo -e "${GREEN}✓ iTerm2 configuration imported!${RESET}"
+        echo ""
+        echo "Please restart iTerm2 for changes to take effect."
+    else
+        echo -e "${YELLOW}Warning: Could not import via defaults${RESET}"
+        echo "  Please manually import: ${CONFIG_FILE}"
+        echo "  iTerm2 → Preferences → General → Preferences → Load preferences from a custom folder"
+    fi
+else
+    echo -e "${YELLOW}No configuration file found at:${RESET} $CONFIG_FILE"
+fi
+
+echo ""
+echo -e "${GREEN}✓ Installation complete!${RESET}"
