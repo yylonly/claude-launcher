@@ -17,8 +17,12 @@ An interactive launcher for [Claude Code](https://claude.ai/code) that supports 
 ```
 claude-launcher/
 ├── start-claude.sh      # Main launcher script (core)
-├── install.sh          # Local installation script
-├── install-remote.sh   # One-liner remote installation
+├── install.sh           # Local installation script
+├── install-remote.sh    # One-liner remote installation
+├── iterm2/             # iTerm2 configuration export/import
+│   ├── config.xml       # Exported iTerm2 preferences
+│   ├── export.sh        # Export current iTerm2 config
+│   └── install.sh       # One-click iTerm2 + font installer
 ├── README.md           # This file
 └── CLAUDE.md           # Claude Code configuration guide
 ```
@@ -27,7 +31,8 @@ claude-launcher/
 
 ### start-claude.sh (Core)
 - **External Dependencies:**
-  - Claude Code (`claude` command)
+  - Claude Code (`claude` command, via mise or official installer)
+  - mise (tool version manager, auto-installed if missing)
   - Python 3 (for JSON merging)
   - curl (for API calls and updates)
   - claude-hud plugin (optional, auto-installed)
@@ -40,7 +45,7 @@ claude-launcher/
 ### install.sh
 - **Dependencies:**
   - `start-claude.sh` (source file to install)
-  - bash shell
+  - zsh shell
 - **Creates:**
   - `~/.local/bin/claude-launcher` (or `~/bin`, `/usr/local/bin`)
   - `~/.local/bin/cli` (symlink)
@@ -174,9 +179,59 @@ cli plugin -d claude-hud
 
 ## Requirements
 
-- bash 4.0+
+- macOS (zsh shell)
 - API key for your chosen provider
 - [Claude Code](https://claude.ai/code) (auto-installed if missing)
+
+## Terminal Setup (Optional)
+
+### iTerm2 + tmux Setup
+
+The launcher automatically configures tmux with:
+- Mouse support enabled
+- `Ctrl-a` as prefix (instead of default `Ctrl-b`)
+- Custom status bar colors
+
+Export and import your iTerm2 settings across machines:
+
+```bash
+# On source machine - export current iTerm2 config
+cd claude-launcher
+./iterm2/export.sh
+
+# On target machine - install iTerm2 + SF Mono font + import config
+cd claude-launcher
+./iterm2/install.sh
+```
+
+The installer will:
+1. Download and install iTerm2 (if not present)
+2. Install SF Mono font
+3. Import your saved iTerm2 configuration
+
+### mise Tool Management
+
+The launcher uses [mise](https://mise.jdx.dev/) to manage tool versions:
+
+```bash
+# Check for mise updates
+mise self-update
+
+# List all tools with version info
+mise ls
+
+# Check for outdated tools
+mise outdated
+
+# Update all tools
+mise upgrade
+```
+
+Tools managed by mise:
+- `python` — Python runtime
+- `node` — Node.js runtime
+- `bash` — Bash shell
+- `claude` — Claude Code
 
 ## Getting API Keys
 
