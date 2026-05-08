@@ -56,7 +56,7 @@ fi
 
 if [[ ! -t 0 ]] && [[ "$already_in_tmux" == "false" ]]; then
   TMUX_CONF=$(setup_tmux_config)
-  exec tmux -f "$TMUX_CONF" new-session -A -s "claude-launcher" "$0" "$@"
+  exec env IN_TMUX_SESSION=1 tmux -f "$TMUX_CONF" new-session -A -s "claude-launcher" "$0" "$@"
 fi
 
 # ─── Load config ──────────────────────────────────────────────────────────────
@@ -1348,9 +1348,24 @@ quick_launch() {
   # Setup tmux config
   TMUX_CONF=$(setup_tmux_config)
 
-  # Launch in tmux session - create detached, then attach
-  tmux -f "$TMUX_CONF" new-session -d -s claude-launcher "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
-  tmux -f "$TMUX_CONF" attach-session -t claude-launcher
+  # Launch in tmux session
+  if [[ "$IN_TMUX_SESSION" == "1" ]]; then
+    # Was exec'd into tmux via new-session at top - already have a window, just attach
+    :
+  elif [[ -n "$TMUX" ]]; then
+    # Already inside tmux - just create a new window
+    tmux -f "$TMUX_CONF" new-window -t claude-launcher -n "claude" "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
+  else
+    # Outside tmux - create or attach session with claude command
+    if tmux -f "$TMUX_CONF" has-session -t claude-launcher 2>/dev/null; then
+      # Session exists - create a new window
+      tmux -f "$TMUX_CONF" new-window -t claude-launcher -n "claude" "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
+    else
+      # No session - create one with claude command
+      tmux -f "$TMUX_CONF" new-session -d -s claude-launcher "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
+    fi
+    tmux -f "$TMUX_CONF" attach-session -t claude-launcher
+  fi
 }
 
 # ─── Uninstall Subcommand ─────────────────────────────────────────────────────
@@ -2441,6 +2456,23 @@ CLAUDE_CMD="claude --model $opus_model --permission-mode bypassPermissions $(pri
 # Setup tmux config
 TMUX_CONF=$(setup_tmux_config)
 
-# Launch in tmux session - create detached, then attach
-tmux -f "$TMUX_CONF" new-session -d -s claude-launcher "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
-tmux -f "$TMUX_CONF" attach-session -t claude-launcher
+# Launch in tmux session - create new window in existing session, then attach
+# Only kill if already inside the claude-launcher session (to avoid re-entering ourselves)
+  # Launch in tmux session
+  if [[ "$IN_TMUX_SESSION" == "1" ]]; then
+    # Was exec'd into tmux via new-session at top - already have a window, just attach
+    :
+  elif [[ -n "$TMUX" ]]; then
+    # Already inside tmux - just create a new window
+    tmux -f "$TMUX_CONF" new-window -t claude-launcher -n "claude" "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
+  else
+    # Outside tmux - create or attach session with claude command
+    if tmux -f "$TMUX_CONF" has-session -t claude-launcher 2>/dev/null; then
+      # Session exists - create a new window
+      tmux -f "$TMUX_CONF" new-window -t claude-launcher -n "claude" "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
+    else
+      # No session - create one with claude command
+      tmux -f "$TMUX_CONF" new-session -d -s claude-launcher "$CLAUDE_CMD; echo ''; echo 'Session ended. Press Enter to close this window.'; read -r"
+    fi
+    tmux -f "$TMUX_CONF" attach-session -t claude-launcher
+  fi
