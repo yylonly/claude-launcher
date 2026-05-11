@@ -1146,6 +1146,39 @@ PYEOF
   echo -e "  ${GREEN}✓ Tavily MCP configured!${RESET}"
 }
 
+# ─── Check and install iTerm2 ─────────────────────────────────────────────────
+check_iterm2() {
+  echo -e "${CYAN}${BOLD}  Checking iTerm2...${RESET}"
+  echo ""
+
+  if [[ -d "/Applications/iTerm.app" ]]; then
+    echo -e "  ${GREEN}✓${RESET} iTerm2 is installed"
+  else
+    echo -e "  ${YELLOW}✗${RESET} iTerm2 is not installed"
+    echo ""
+    print -n "  Download and install iTerm2? [Y/n]: " >&2
+    read install_choice
+    echo ""
+
+    if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
+      local iterm2_install="$(dirname "$SCRIPT_PATH")/iterm2/install.sh"
+      if [[ -f "$iterm2_install" ]]; then
+        chmod +x "$iterm2_install"
+        if zsh "$iterm2_install"; then
+          echo ""
+          echo -e "${GREEN}✓ iTerm2 setup complete!${RESET}"
+        else
+          echo ""
+          echo -e "${RED}✗ iTerm2 installation failed${RESET}"
+        fi
+      else
+        echo -e "${RED}iTerm2 install script not found: ${iterm2_install}${RESET}"
+      fi
+    fi
+  fi
+  echo ""
+}
+
 # ─── Update settings.local.json with MCP permissions ─────────────────────────────
 update_mcp_permissions() {
   echo -e "  ${CYAN}Updating MCP permissions...${RESET}"
@@ -1952,6 +1985,7 @@ fi
 if [[ "$CONF_MODE" -eq 1 ]]; then
   check_dependencies
   check_claude_code
+  check_iterm2
 fi
 
 # ─── Resume mode: restore last session ─────────────────────────────────────────

@@ -30,21 +30,17 @@ else
     echo ""
 
     if [[ -z "$install_choice" || "$install_choice" =~ ^[Yy]$ ]]; then
-        echo -e "${CYAN}Downloading iTerm2...${RESET}"
-        local tmp_dmg=$(mktemp).dmg
-        if curl -sSL "https://iterm2.com/downloads/latest/iTerm2-Latest.dmg" -o "$tmp_dmg"; then
-            echo -e "${CYAN}Installing iTerm2...${RESET}"
-            hdiutil attach "$tmp_dmg" -nobrowse 2>/dev/null || true
-            cp -r "/Volumes/iTerm2-*/iTerm.app" "/Applications/" 2>/dev/null || {
-                echo -e "${RED}Failed to copy iTerm.app${RESET}"
-                rm -f "$tmp_dmg"
+        echo -e "${CYAN}Installing iTerm2 via Homebrew...${RESET}"
+        if command -v brew &> /dev/null; then
+            if brew install --cask iterm2 2>&1; then
+                echo -e "${GREEN}✓ iTerm2 installed successfully!${RESET}"
+            else
+                echo -e "${RED}Failed to install iTerm2 via Homebrew${RESET}"
                 exit 1
-            }
-            hdiutil detach "/Volumes/iTerm2-*" 2>/dev/null || true
-            rm -f "$tmp_dmg"
-            echo -e "${GREEN}✓ iTerm2 installed successfully!${RESET}"
+            fi
         else
-            echo -e "${RED}Failed to download iTerm2${RESET}"
+            echo -e "${RED}Homebrew is not installed. Please install Homebrew first.${RESET}"
+            echo "  Visit: https://brew.sh"
             exit 1
         fi
     else
@@ -73,17 +69,43 @@ else
         hdiutil attach "$tmp_zip" -mountpoint "$mount_point" -nobrowse 2>/dev/null || {
             echo -e "${YELLOW}Warning: Could not mount DMG, trying alternative method${RESET}"
             rm -f "$tmp_zip"
-            # Try to install from system fonts
+            # Try to install Monaco as fallback
             if [[ -f "/System/Library/Fonts/Monaco.ttf" ]]; then
                 cp "/System/Library/Fonts/Monaco.ttf" "$FONT_DIR/" 2>/dev/null && echo -e "${GREEN}✓${RESET} Monaco font installed"
             fi
-            return 0
+            exit 0
         }
 
-        # Copy all font files
-        find "$mount_point" -name "*.ttf" -o -name "*.otf" 2>/dev/null | while read -r font; do
-            cp "$font" "$FONT_DIR/" 2>/dev/null && echo "  Installed: $(basename "$font")"
-        done
+        # Find the pkg file in the DMG and extract fonts
+        local pkg_file=$(find "$mount_point" -name "*.pkg" 2>/dev/null | head -1)
+        if [[ -n "$pkg_file" ]]; then
+            # Extract package using xar
+            local pkg_extracted="/tmp/sfmono_extract_$$"
+            rm -rf "$pkg_extracted" 2>/dev/null
+            mkdir -p "$pkg_extracted"
+            xar -xf "$pkg_file" -C "$pkg_extracted" 2>/dev/null
+
+            # Find and extract fonts from Payload (gzip compressed cpio)
+            local payload_file="$pkg_extracted"/SFMonoFonts.pkg/Payload
+            if [[ -f "$payload_file" ]]; then
+                local fonts_dir="$pkg_extracted"/fonts_out
+                rm -rf "$fonts_dir" 2>/dev/null
+                mkdir -p "$fonts_dir"
+                (cd "$fonts_dir" && gzip -dc "$payload_file" | cpio -id 2>/dev/null)
+
+                # Copy extracted fonts
+                find "$fonts_dir" -name "*.ttf" -o -name "*.otf" 2>/dev/null | while read -r font; do
+                    cp "$font" "$FONT_DIR/" 2>/dev/null && echo "  Installed: $(basename "$font")"
+                done
+                rm -rf "$fonts_dir"
+            fi
+            rm -rf "$pkg_extracted"
+        else
+            # Fallback: copy any direct font files
+            find "$mount_point" -name "*.ttf" -o -name "*.otf" 2>/dev/null | while read -r font; do
+                cp "$font" "$FONT_DIR/" 2>/dev/null && echo "  Installed: $(basename "$font")"
+            done
+        fi
 
         hdiutil detach "$mount_point" 2>/dev/null || true
         rm -f "$tmp_zip"
