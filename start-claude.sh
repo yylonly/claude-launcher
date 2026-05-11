@@ -471,6 +471,7 @@ install_with_mise() {
     node) install_cmd="mise install node" ;;
     bash) install_cmd="mise install bash" ;;
     claude) install_cmd="mise install claude" ;;
+    tmux) install_cmd="mise install tmux" ;;
     *) return 1 ;;
   esac
 
@@ -528,7 +529,7 @@ check_dependencies() {
   echo ""
 
   # Required dependencies
-  local deps=("bash" "curl" "python3")
+  local deps=("bash" "curl" "python3" "tmux")
   local missing_deps=()
   for dep in "${deps[@]}"; do
     if ! command -v "$dep" &>/dev/null; then
@@ -561,6 +562,11 @@ check_dependencies() {
     echo -e "  ${GREEN}✓${RESET} claude: installed"
   else
     echo -e "  ${YELLOW}✗${RESET} claude: not installed"
+  fi
+  if command -v tmux &>/dev/null; then
+    echo -e "  ${GREEN}✓${RESET} tmux: $(tmux -V)"
+  else
+    echo -e "  ${YELLOW}✗${RESET} tmux: not installed"
   fi
 
   # Use mise to check and update tools if mise is available
